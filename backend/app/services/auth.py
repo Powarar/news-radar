@@ -46,3 +46,4 @@ class AuthService:
             access_token=security.create_access_token(subject),
             refresh_token=security.create_refresh_token(subject),
         )
+
