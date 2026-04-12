@@ -16,8 +16,35 @@ class UserRepository:
         result = await self.db.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
+    async def get_by_google_id(self, google_id: str) -> User | None:
+        result = await self.db.execute(select(User).where(User.google_id == google_id))
+        return result.scalar_one_or_none()
+
+    async def get_by_telegram_id(self, telegram_id: str) -> User | None:
+        result = await self.db.execute(select(User).where(User.telegram_id == telegram_id))
+        return result.scalar_one_or_none()
+
     async def create(self, email: str, username: str, hashed_password: str) -> User:
         user = User(email=email, username=username, hashed_password=hashed_password)
+        self.db.add(user)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+
+    async def create_telegram(self, username: str, telegram_id: str) -> User:
+        # email у TG юзера нет — генерируем заглушку
+        user = User(
+            email=f"tg_{telegram_id}@telegram.local",
+            username=username,
+            telegram_id=telegram_id,
+        )
+        self.db.add(user)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+
+    async def create_google(self, email: str, username: str, google_id: str) -> User:
+        user = User(email=email, username=username, google_id=google_id)
         self.db.add(user)
         await self.db.commit()
         await self.db.refresh(user)

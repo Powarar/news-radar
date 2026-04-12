@@ -4,14 +4,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import CurrentUser
+from app.core.database import get_db
 from app.schemas.user import UserResponse, UserUpdate
 from app.repositories.user import UserRepository
-from app.core.database import get_db
-from app.services.auth import AuthService
+
 router = APIRouter()
 
-def get_auth_service(db: Annotated[AsyncSession, Depends(get_db)]) -> AuthService:
-    return AuthService(db)
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: CurrentUser):

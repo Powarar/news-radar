@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     debug: bool = True
     secret_key: str
 
+    #TTL
+    oauth_code_ttl: int
+
+    
     # Database
     postgres_host: str = "db"
     postgres_port: int = 5432
@@ -33,9 +37,13 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://redis:6379/0"
 
+    # Frontend
+    frontend_url: str = "http://localhost:5173"
+
     # Google OAuth
     google_client_id: str = ""
     google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/api/v1/auth/google/callback"
 
     # Telegram
     telegram_bot_token: str = ""

@@ -32,4 +32,4 @@ Thumbs.db
 *.swp
 
 #etc
-.creds
+*.creds

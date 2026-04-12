@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from starlette.middleware.sessions import SessionMiddleware
 from app.api.v1.routes import auth, news, preferences, sources, users
 from app.core.config import settings
 
@@ -10,6 +10,11 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    https_only=False
+    )
 
 app.add_middleware(
     CORSMiddleware,
