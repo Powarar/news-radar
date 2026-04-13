@@ -1,11 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Routes, Route, useNavigate, useLocation, Link, Navigate } from "react-router-dom";
 import { api } from "./api/client";
 import { User, NewsItem } from "./types";
-
-// ─────────────────────────────────────────────────────────────
-//  Хук: загружает текущего пользователя из API
-// ─────────────────────────────────────────────────────────────
 
 function useUser() {
   const [user, setUser] = useState<User | null>(null);
@@ -16,16 +12,12 @@ function useUser() {
     if (!token) { setLoading(false); return; }
     api.get<User>("/v1/users/me")
       .then((r) => setUser(r.data))
-      .catch(() => {/* токен протух — useEffect вернёт null */})
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   return { user, loading };
 }
-
-// ─────────────────────────────────────────────────────────────
-//  NavBar — верхняя панель навигации
-// ─────────────────────────────────────────────────────────────
 
 function NavBar() {
   return (
@@ -39,12 +31,7 @@ function NavBar() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-//  NewsCard — одна карточка новости
-// ─────────────────────────────────────────────────────────────
-
 function NewsCard({ item }: { item: NewsItem }) {
-  // Сколько времени прошло — "2 часа назад"
   function timeAgo(iso: string) {
     const diff = Date.now() - new Date(iso).getTime();
     const min = Math.floor(diff / 60_000);
@@ -55,26 +42,30 @@ function NewsCard({ item }: { item: NewsItem }) {
     return `${Math.floor(h / 24)} д назад`;
   }
 
-  // Обрезаем длинный текст до 280 символов
   const preview = item.body.length > 280
     ? item.body.slice(0, 280) + "…"
     : item.body;
 
   return (
     <article style={s.card}>
-      {/* Шапка: источник + время */}
+      {item.image_url && (
+        <img
+          src={item.image_url}
+          alt=""
+          style={s.cardImage}
+          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+      )}
+
       <div style={s.cardMeta}>
         <span style={s.source}>{item.source.name}</span>
         <span style={s.time}>{timeAgo(item.published_at ?? item.created_at)}</span>
       </div>
 
-      {/* Заголовок — если есть */}
       {item.title && <h2 style={s.cardTitle}>{item.title}</h2>}
 
-      {/* Текст новости */}
       <p style={s.cardBody}>{preview}</p>
 
-      {/* Ссылка на оригинал */}
       {item.url && (
         <a href={item.url} target="_blank" rel="noreferrer" style={s.readMore}>
           Читать оригинал →
@@ -84,36 +75,32 @@ function NewsCard({ item }: { item: NewsItem }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-//  FeedPage — страница с лентой новостей
-// ─────────────────────────────────────────────────────────────
+const LIMIT = 20;
 
 function FeedPage() {
   const [items, setItems] = useState<NewsItem[]>([]);
-  const [offset, setOffset] = useState(0);
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const LIMIT = 20;
 
-  // Загружаем следующую порцию новостей
-  async function loadMore() {
-    if (loading || !hasMore) return;
+  async function loadPage(p: number) {
     setLoading(true);
     try {
-      const r = await api.get<{ items: NewsItem[] }>(`/v1/news/?limit=${LIMIT}&offset=${offset}`);
-      const newItems = r.data.items;
-      setItems(prev => [...prev, ...newItems]);
-      setOffset(prev => prev + LIMIT);
-      if (newItems.length < LIMIT) setHasMore(false); // больше нет
-    } catch {
-      // Если API недоступен — просто показываем кнопку ещё раз
+      const r = await api.get<{ items: NewsItem[]; total: number }>(
+        `/v1/news/?limit=${LIMIT}&offset=${p * LIMIT}`
+      );
+      setItems(r.data.items);
+      setTotal(r.data.total);
+      setPage(p);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setLoading(false);
     }
   }
 
-  // Загружаем первую страницу при открытии
-  useEffect(() => { loadMore(); }, []);
+  useEffect(() => { loadPage(0); }, []);
+
+  const totalPages = Math.ceil(total / LIMIT);
 
   return (
     <div style={s.page}>
@@ -123,31 +110,42 @@ function FeedPage() {
           <div style={s.empty}>
             <p>Новостей пока нет.</p>
             <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 8 }}>
-              Добавьте источники и запустите парсинг через Celery worker.
+              Запустите парсинг через Celery worker.
             </p>
           </div>
         )}
 
-        {items.map(item => <NewsCard key={item.id} item={item} />)}
+        {loading && <div style={s.endMsg}>Загрузка…</div>}
 
-        {/* Кнопка "загрузить ещё" */}
-        {hasMore && (
-          <button style={s.loadBtn} onClick={loadMore} disabled={loading}>
-            {loading ? "Загрузка…" : "Загрузить ещё"}
-          </button>
-        )}
+        {!loading && items.map(item => <NewsCard key={item.id} item={item} />)}
 
-        {!hasMore && items.length > 0 && (
-          <p style={s.endMsg}>Вы всё прочитали ✓</p>
+        {totalPages > 1 && (
+          <div style={s.pagination}>
+            <button
+              style={s.pageBtn}
+              onClick={() => loadPage(page - 1)}
+              disabled={page === 0}
+            >
+              ← Назад
+            </button>
+
+            <span style={s.pageInfo}>
+              {page + 1} / {totalPages}
+            </span>
+
+            <button
+              style={s.pageBtn}
+              onClick={() => loadPage(page + 1)}
+              disabled={page >= totalPages - 1}
+            >
+              Вперёд →
+            </button>
+          </div>
         )}
       </main>
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────
-//  ProfilePage
-// ─────────────────────────────────────────────────────────────
 
 function ProfilePage() {
   const { user, loading } = useUser();
@@ -183,10 +181,6 @@ function ProfilePage() {
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────
-//  Auth pages
-// ─────────────────────────────────────────────────────────────
 
 function TelegramWidget({ onAuth }: { onAuth: (data: object) => void }) {
   useEffect(() => {
@@ -234,7 +228,6 @@ function LoginPage() {
     } catch (err: any) {
       const msg = err.response?.data?.detail;
       if (Array.isArray(msg)) {
-        // Pydantic validation error — берём первое сообщение
         setError(msg[0]?.msg ?? "Ошибка");
       } else {
         setError(msg ?? "Что-то пошло не так");
@@ -257,7 +250,6 @@ function LoginPage() {
           Новости с AI-персонализацией
         </p>
 
-        {/* Табы: Войти / Регистрация */}
         <div style={s.tabs}>
           <button style={tab === "login" ? s.tabActive : s.tab} onClick={() => { setTab("login"); setError(""); }}>
             Войти
@@ -267,7 +259,6 @@ function LoginPage() {
           </button>
         </div>
 
-        {/* Форма email/пароль */}
         <form onSubmit={handleSubmit} style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
           <input
             style={s.input}
@@ -306,14 +297,12 @@ function LoginPage() {
           </button>
         </form>
 
-        {/* Разделитель */}
         <div style={s.divider}>
           <span style={s.dividerLine} />
           <span style={s.dividerText}>или</span>
           <span style={s.dividerLine} />
         </div>
 
-        {/* OAuth */}
         <a href="/api/v1/auth/google/login" style={s.googleBtn}>
           <svg width="18" height="18" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
             <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -336,8 +325,7 @@ function OAuthCallback() {
   const location = useLocation();
 
   useEffect(() => {
-    // Если токен уже есть — StrictMode запустил эффект второй раз,
-    // первый уже всё сделал. Просто идём на /feed.
+    // StrictMode double-invokes effects — skip if token already saved
     if (localStorage.getItem("access_token")) {
       navigate("/feed", { replace: true });
       return;
@@ -359,12 +347,7 @@ function OAuthCallback() {
   return <div style={s.center}>Входим...</div>;
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Стили
-// ─────────────────────────────────────────────────────────────
-
 const s: Record<string, React.CSSProperties> = {
-  // Навигация
   nav: {
     position: "sticky",
     top: 0,
@@ -394,7 +377,6 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 500,
   },
 
-  // Лента
   page: {
     minHeight: "100dvh",
     background: "var(--bg)",
@@ -413,7 +395,30 @@ const s: Record<string, React.CSSProperties> = {
     color: "var(--text-muted)",
   },
 
-  // Карточка новости
+  pagination: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    padding: "16px 0",
+  },
+  pageBtn: {
+    padding: "8px 20px",
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text)",
+    cursor: "pointer",
+    fontSize: 14,
+    fontWeight: 500,
+  },
+  pageInfo: {
+    color: "var(--text-muted)",
+    fontSize: 14,
+    minWidth: 60,
+    textAlign: "center" as const,
+  },
+
   card: {
     background: "var(--bg-card)",
     border: "1px solid var(--border)",
@@ -422,6 +427,13 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 8,
+  },
+  cardImage: {
+    width: "100%",
+    height: 200,
+    objectFit: "cover" as const,
+    borderRadius: "var(--radius-sm)",
+    marginBottom: 4,
   },
   cardMeta: {
     display: "flex",
@@ -458,17 +470,6 @@ const s: Record<string, React.CSSProperties> = {
     alignSelf: "flex-start",
   },
 
-  // Кнопка "загрузить ещё"
-  loadBtn: {
-    padding: "12px",
-    background: "var(--bg-card)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-sm)",
-    color: "var(--text)",
-    cursor: "pointer",
-    fontSize: 14,
-    marginTop: 8,
-  },
   endMsg: {
     textAlign: "center",
     color: "var(--text-muted)",
@@ -476,7 +477,6 @@ const s: Record<string, React.CSSProperties> = {
     padding: "16px",
   },
 
-  // Профиль
   profileWrap: {
     minHeight: "calc(100dvh - 56px)",
     display: "flex",
@@ -523,7 +523,6 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
   },
 
-  // Форма логина
   tabs: {
     display: "flex",
     width: "100%",
@@ -599,7 +598,6 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 12,
   },
 
-  // Auth
   authPage: {
     minHeight: "100dvh",
     display: "flex",
@@ -635,7 +633,6 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "center",
   },
 
-  // Утилиты
   center: {
     minHeight: "100dvh",
     display: "flex",
@@ -645,14 +642,9 @@ const s: Record<string, React.CSSProperties> = {
   },
 };
 
-// ─────────────────────────────────────────────────────────────
-//  Роутер — какой путь → какой компонент
-// ─────────────────────────────────────────────────────────────
-
 export default function App() {
   return (
     <Routes>
-      {/* / → сразу перенаправляем на /feed */}
       <Route path="/" element={<Navigate to="/feed" replace />} />
       <Route path="/feed" element={<FeedPage />} />
       <Route path="/login" element={<LoginPage />} />

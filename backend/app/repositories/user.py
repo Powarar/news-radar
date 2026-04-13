@@ -32,9 +32,8 @@ class UserRepository:
         return user
 
     async def create_telegram(self, username: str, telegram_id: str) -> User:
-        # email у TG юзера нет — генерируем заглушку
         user = User(
-            email=f"tg_{telegram_id}@telegram.local",
+            email=None,
             username=username,
             telegram_id=telegram_id,
         )
