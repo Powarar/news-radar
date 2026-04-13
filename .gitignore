@@ -1,0 +1,35 @@
+# Env
+.env
+.env.prod
+*.session
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dist/
+*.egg-info/
+
+# Alembic
+alembic/versions/*.py
+
+# Node
+node_modules/
+frontend/dist/
+
+# Docker volumes
+postgres_data/
+redis_data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+#etc
+*.creds
