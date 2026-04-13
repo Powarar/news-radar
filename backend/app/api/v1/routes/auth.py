@@ -67,10 +67,8 @@ async def google_callback(
     token = await oauth.google.authorize_access_token(request)
     user_info = token.get("userinfo")
 
-    # получаем одноразовый code (не JWT токены!)
     code = await service.google_login(user_info)
 
-    # редиректим на фронт только с коротким code, токены в URL не светятся
     return RedirectResponse(f"{settings.frontend_url}/oauth/callback?code={code}")
 
 
@@ -79,7 +77,6 @@ async def telegram_login(
     request: Request,
     service: Annotated[AuthService, Depends(get_auth_service)],
 ):
-    # фронт присылает данные от виджета как JSON
     data = await request.json()
     return await service.telegram_login(data)
 
@@ -89,7 +86,6 @@ async def exchange_oauth_code(
     data: OAuthCodeRequest,
     service: Annotated[AuthService, Depends(get_auth_service)],
 ):
-    # фронт присылает code, получает токены в теле ответа
     return await service.exchange_oauth_code(data.code)
 
 

@@ -1,7 +1,11 @@
-import { useEffect, useState } from "react";
-import { Routes, Route, useNavigate, useLocation, Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Routes, Route, useNavigate, useLocation, Link, Navigate } from "react-router-dom";
 import { api } from "./api/client";
-import { User } from "./types";
+import { User, NewsItem } from "./types";
+
+// ─────────────────────────────────────────────────────────────
+//  Хук: загружает текущего пользователя из API
+// ─────────────────────────────────────────────────────────────
 
 function useUser() {
   const [user, setUser] = useState<User | null>(null);
@@ -12,11 +16,138 @@ function useUser() {
     if (!token) { setLoading(false); return; }
     api.get<User>("/v1/users/me")
       .then((r) => setUser(r.data))
+      .catch(() => {/* токен протух — useEffect вернёт null */})
       .finally(() => setLoading(false));
   }, []);
 
   return { user, loading };
 }
+
+// ─────────────────────────────────────────────────────────────
+//  NavBar — верхняя панель навигации
+// ─────────────────────────────────────────────────────────────
+
+function NavBar() {
+  return (
+    <nav style={s.nav}>
+      <Link to="/feed" style={s.navLogo}>News Radar</Link>
+      <div style={s.navLinks}>
+        <Link to="/feed" style={s.navLink}>Лента</Link>
+        <Link to="/profile" style={s.navLink}>Профиль</Link>
+      </div>
+    </nav>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  NewsCard — одна карточка новости
+// ─────────────────────────────────────────────────────────────
+
+function NewsCard({ item }: { item: NewsItem }) {
+  // Сколько времени прошло — "2 часа назад"
+  function timeAgo(iso: string) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const min = Math.floor(diff / 60_000);
+    if (min < 1) return "только что";
+    if (min < 60) return `${min} мин назад`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `${h} ч назад`;
+    return `${Math.floor(h / 24)} д назад`;
+  }
+
+  // Обрезаем длинный текст до 280 символов
+  const preview = item.body.length > 280
+    ? item.body.slice(0, 280) + "…"
+    : item.body;
+
+  return (
+    <article style={s.card}>
+      {/* Шапка: источник + время */}
+      <div style={s.cardMeta}>
+        <span style={s.source}>{item.source.name}</span>
+        <span style={s.time}>{timeAgo(item.published_at ?? item.created_at)}</span>
+      </div>
+
+      {/* Заголовок — если есть */}
+      {item.title && <h2 style={s.cardTitle}>{item.title}</h2>}
+
+      {/* Текст новости */}
+      <p style={s.cardBody}>{preview}</p>
+
+      {/* Ссылка на оригинал */}
+      {item.url && (
+        <a href={item.url} target="_blank" rel="noreferrer" style={s.readMore}>
+          Читать оригинал →
+        </a>
+      )}
+    </article>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  FeedPage — страница с лентой новостей
+// ─────────────────────────────────────────────────────────────
+
+function FeedPage() {
+  const [items, setItems] = useState<NewsItem[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const LIMIT = 20;
+
+  // Загружаем следующую порцию новостей
+  async function loadMore() {
+    if (loading || !hasMore) return;
+    setLoading(true);
+    try {
+      const r = await api.get<{ items: NewsItem[] }>(`/v1/news/?limit=${LIMIT}&offset=${offset}`);
+      const newItems = r.data.items;
+      setItems(prev => [...prev, ...newItems]);
+      setOffset(prev => prev + LIMIT);
+      if (newItems.length < LIMIT) setHasMore(false); // больше нет
+    } catch {
+      // Если API недоступен — просто показываем кнопку ещё раз
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Загружаем первую страницу при открытии
+  useEffect(() => { loadMore(); }, []);
+
+  return (
+    <div style={s.page}>
+      <NavBar />
+      <main style={s.feed}>
+        {items.length === 0 && !loading && (
+          <div style={s.empty}>
+            <p>Новостей пока нет.</p>
+            <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 8 }}>
+              Добавьте источники и запустите парсинг через Celery worker.
+            </p>
+          </div>
+        )}
+
+        {items.map(item => <NewsCard key={item.id} item={item} />)}
+
+        {/* Кнопка "загрузить ещё" */}
+        {hasMore && (
+          <button style={s.loadBtn} onClick={loadMore} disabled={loading}>
+            {loading ? "Загрузка…" : "Загрузить ещё"}
+          </button>
+        )}
+
+        {!hasMore && items.length > 0 && (
+          <p style={s.endMsg}>Вы всё прочитали ✓</p>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ProfilePage
+// ─────────────────────────────────────────────────────────────
 
 function ProfilePage() {
   const { user, loading } = useUser();
@@ -28,7 +159,7 @@ function ProfilePage() {
     navigate("/login");
   }
 
-  if (loading) return <div style={styles.center}>Загрузка...</div>;
+  if (loading) return <div style={s.center}>Загрузка...</div>;
   if (!user) { navigate("/login"); return null; }
 
   const hour = new Date().getHours();
@@ -38,22 +169,28 @@ function ProfilePage() {
     hour < 18 ? "Добрый день" : "Добрый вечер";
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <div style={styles.avatar}>{user.username[0].toUpperCase()}</div>
-        <h1 style={styles.greeting}>{greeting}, {user.username}!</h1>
-        <p style={styles.email}>{user.email}</p>
-        <div style={styles.badge}>{user.plan === "pro" ? "Pro" : "Free"}</div>
-        <button style={styles.btn} onClick={logout}>Выйти</button>
+    <div style={s.page}>
+      <NavBar />
+      <div style={s.profileWrap}>
+        <div style={s.card}>
+          <div style={s.avatar}>{user.username[0].toUpperCase()}</div>
+          <h1 style={s.greeting}>{greeting}, {user.username}!</h1>
+          <p style={s.email}>{user.email}</p>
+          <div style={s.badge}>{user.plan === "pro" ? "Pro" : "Free"}</div>
+          <button style={s.btn} onClick={logout}>Выйти</button>
+        </div>
       </div>
     </div>
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+//  Auth pages
+// ─────────────────────────────────────────────────────────────
+
 function TelegramWidget({ onAuth }: { onAuth: (data: object) => void }) {
   useEffect(() => {
     (window as any).onTelegramAuth = onAuth;
-
     const script = document.createElement("script");
     script.src = "https://telegram.org/js/telegram-widget.js?22";
     script.setAttribute("data-telegram-login", import.meta.env.VITE_TG_BOT_USERNAME);
@@ -62,33 +199,123 @@ function TelegramWidget({ onAuth }: { onAuth: (data: object) => void }) {
     script.setAttribute("data-request-access", "write");
     script.async = true;
     document.getElementById("tg-widget")?.appendChild(script);
-
     return () => { delete (window as any).onTelegramAuth; };
   }, []);
-
   return <div id="tg-widget" />;
 }
 
 function LoginPage() {
   const navigate = useNavigate();
+  const [tab, setTab] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  function saveTokens(data: { access_token: string; refresh_token: string }) {
+    localStorage.setItem("access_token", data.access_token);
+    localStorage.setItem("refresh_token", data.refresh_token);
+    navigate("/feed");
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      if (tab === "login") {
+        const r = await api.post("/v1/auth/login", { email, password });
+        saveTokens(r.data);
+      } else {
+        const r = await api.post("/v1/auth/register", { email, username, password });
+        saveTokens(r.data);
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.detail;
+      if (Array.isArray(msg)) {
+        // Pydantic validation error — берём первое сообщение
+        setError(msg[0]?.msg ?? "Ошибка");
+      } else {
+        setError(msg ?? "Что-то пошло не так");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleTelegramAuth(data: object) {
-    // виджет вызвал нас с данными юзера — шлём на бэкенд
     const r = await api.post("/v1/auth/telegram", data);
-    localStorage.setItem("access_token", r.data.access_token);
-    localStorage.setItem("refresh_token", r.data.refresh_token);
-    navigate("/profile");
+    saveTokens(r.data);
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <h1 style={{ fontSize: 24, marginBottom: 8 }}>News Radar</h1>
-        <p style={{ color: "var(--text-muted)", marginBottom: 32 }}>
+    <div style={s.authPage}>
+      <div style={s.authCard}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>News Radar</h1>
+        <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 20 }}>
           Новости с AI-персонализацией
         </p>
-        <a href="/api/v1/auth/google/login" style={styles.googleBtn}>
-          <svg width="20" height="20" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
+
+        {/* Табы: Войти / Регистрация */}
+        <div style={s.tabs}>
+          <button style={tab === "login" ? s.tabActive : s.tab} onClick={() => { setTab("login"); setError(""); }}>
+            Войти
+          </button>
+          <button style={tab === "register" ? s.tabActive : s.tab} onClick={() => { setTab("register"); setError(""); }}>
+            Регистрация
+          </button>
+        </div>
+
+        {/* Форма email/пароль */}
+        <form onSubmit={handleSubmit} style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+          <input
+            style={s.input}
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
+          {tab === "register" && (
+            <input
+              style={s.input}
+              type="text"
+              placeholder="Имя пользователя"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              required
+              autoComplete="username"
+            />
+          )}
+          <input
+            style={s.input}
+            type="password"
+            placeholder="Пароль (минимум 8 символов)"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+            autoComplete={tab === "login" ? "current-password" : "new-password"}
+          />
+
+          {error && <p style={s.errorMsg}>{error}</p>}
+
+          <button type="submit" style={s.submitBtn} disabled={loading}>
+            {loading ? "..." : tab === "login" ? "Войти" : "Создать аккаунт"}
+          </button>
+        </form>
+
+        {/* Разделитель */}
+        <div style={s.divider}>
+          <span style={s.dividerLine} />
+          <span style={s.dividerText}>или</span>
+          <span style={s.dividerLine} />
+        </div>
+
+        {/* OAuth */}
+        <a href="/api/v1/auth/google/login" style={s.googleBtn}>
+          <svg width="18" height="18" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
             <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
             <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
             <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
@@ -109,46 +336,152 @@ function OAuthCallback() {
   const location = useLocation();
 
   useEffect(() => {
+    // Если токен уже есть — StrictMode запустил эффект второй раз,
+    // первый уже всё сделал. Просто идём на /feed.
+    if (localStorage.getItem("access_token")) {
+      navigate("/feed", { replace: true });
+      return;
+    }
+
     const params = new URLSearchParams(location.search);
-    const code = params.get("code"); // одноразовый code, не токен
-
+    const code = params.get("code");
     if (!code) { navigate("/login", { replace: true }); return; }
-
-    // сразу меняем URL чтобы code не висел в адресной строке
     window.history.replaceState({}, "", "/oauth/callback");
-
-    // обмениваем code на токены через POST — токены идут в теле ответа, не в URL
     api.post<{ access_token: string; refresh_token: string }>("/v1/auth/exchange", { code })
       .then((r) => {
         localStorage.setItem("access_token", r.data.access_token);
         localStorage.setItem("refresh_token", r.data.refresh_token);
-        navigate("/profile", { replace: true });
+        navigate("/feed", { replace: true });
       })
       .catch(() => navigate("/login", { replace: true }));
   }, []);
 
-  return <div style={styles.center}>Входим...</div>;
+  return <div style={s.center}>Входим...</div>;
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100dvh",
+// ─────────────────────────────────────────────────────────────
+//  Стили
+// ─────────────────────────────────────────────────────────────
+
+const s: Record<string, React.CSSProperties> = {
+  // Навигация
+  nav: {
+    position: "sticky",
+    top: 0,
+    zIndex: 100,
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
+    padding: "0 20px",
+    height: 56,
+    background: "var(--bg-card)",
+    borderBottom: "1px solid var(--border)",
+  },
+  navLogo: {
+    fontSize: 18,
+    fontWeight: 700,
+    color: "var(--text)",
+    textDecoration: "none",
+  },
+  navLinks: {
+    display: "flex",
+    gap: 24,
+  },
+  navLink: {
+    color: "var(--text-muted)",
+    textDecoration: "none",
+    fontSize: 14,
+    fontWeight: 500,
+  },
+
+  // Лента
+  page: {
+    minHeight: "100dvh",
     background: "var(--bg)",
   },
+  feed: {
+    maxWidth: 680,
+    margin: "0 auto",
+    padding: "16px 16px 40px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  empty: {
+    textAlign: "center",
+    padding: "60px 20px",
+    color: "var(--text-muted)",
+  },
+
+  // Карточка новости
   card: {
     background: "var(--bg-card)",
     border: "1px solid var(--border)",
     borderRadius: "var(--radius)",
-    padding: "40px",
-    width: "100%",
-    maxWidth: "380px",
+    padding: "16px 20px",
     display: "flex",
     flexDirection: "column",
+    gap: 8,
+  },
+  cardMeta: {
+    display: "flex",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: "12px",
+  },
+  source: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--accent)",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+  time: {
+    fontSize: 12,
+    color: "var(--text-muted)",
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: 600,
+    lineHeight: 1.4,
+    color: "var(--text)",
+  },
+  cardBody: {
+    fontSize: 14,
+    color: "var(--text-muted)",
+    lineHeight: 1.6,
+  },
+  readMore: {
+    fontSize: 13,
+    color: "var(--accent)",
+    textDecoration: "none",
+    marginTop: 4,
+    alignSelf: "flex-start",
+  },
+
+  // Кнопка "загрузить ещё"
+  loadBtn: {
+    padding: "12px",
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text)",
+    cursor: "pointer",
+    fontSize: 14,
+    marginTop: 8,
+  },
+  endMsg: {
+    textAlign: "center",
+    color: "var(--text-muted)",
+    fontSize: 13,
+    padding: "16px",
+  },
+
+  // Профиль
+  profileWrap: {
+    minHeight: "calc(100dvh - 56px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatar: {
     width: 72,
@@ -189,6 +522,103 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontSize: 14,
   },
+
+  // Форма логина
+  tabs: {
+    display: "flex",
+    width: "100%",
+    background: "var(--bg-elevated)",
+    borderRadius: "var(--radius-sm)",
+    padding: 3,
+    gap: 3,
+    marginBottom: 4,
+  },
+  tab: {
+    flex: 1,
+    padding: "7px 0",
+    background: "transparent",
+    border: "none",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+    fontSize: 14,
+    fontWeight: 500,
+  },
+  tabActive: {
+    flex: 1,
+    padding: "7px 0",
+    background: "var(--bg-card)",
+    border: "none",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text)",
+    cursor: "pointer",
+    fontSize: 14,
+    fontWeight: 600,
+  },
+  input: {
+    width: "100%",
+    padding: "11px 14px",
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text)",
+    fontSize: 14,
+    outline: "none",
+  },
+  submitBtn: {
+    width: "100%",
+    padding: "11px",
+    background: "var(--accent)",
+    border: "none",
+    borderRadius: "var(--radius-sm)",
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    marginTop: 2,
+  },
+  errorMsg: {
+    color: "var(--danger)",
+    fontSize: 13,
+    textAlign: "center" as const,
+  },
+  divider: {
+    display: "flex",
+    alignItems: "center",
+    width: "100%",
+    gap: 10,
+    margin: "4px 0",
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    background: "var(--border)",
+  },
+  dividerText: {
+    color: "var(--text-muted)",
+    fontSize: 12,
+  },
+
+  // Auth
+  authPage: {
+    minHeight: "100dvh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "var(--bg)",
+  },
+  authCard: {
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius)",
+    padding: "40px",
+    width: "100%",
+    maxWidth: "380px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "12px",
+  },
   googleBtn: {
     display: "flex",
     alignItems: "center",
@@ -204,6 +634,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
     justifyContent: "center",
   },
+
+  // Утилиты
   center: {
     minHeight: "100dvh",
     display: "flex",
@@ -213,10 +645,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
+// ─────────────────────────────────────────────────────────────
+//  Роутер — какой путь → какой компонент
+// ─────────────────────────────────────────────────────────────
+
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<LoginPage />} />
+      {/* / → сразу перенаправляем на /feed */}
+      <Route path="/" element={<Navigate to="/feed" replace />} />
+      <Route path="/feed" element={<FeedPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />
