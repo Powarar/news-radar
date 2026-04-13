@@ -11,9 +11,11 @@ celery_app = Celery(
 )
 
 celery_app.conf.task_routes = {
-    "app.workers.tasks.fetch_sources": {"queue": "parsing"},
-    "app.workers.tasks.process_news_ai": {"queue": "ai"},
-    "app.workers.tasks.send_notifications": {"queue": "default"},
+    "app.workers.tasks.fetch_sources":          {"queue": "parsing"},
+    "app.workers.tasks.fetch_telegram_channel": {"queue": "parsing"},
+    "app.workers.tasks.fetch_website":          {"queue": "parsing"},
+    "app.workers.tasks.process_news_ai":        {"queue": "ai"},
+    "app.workers.tasks.send_notifications":     {"queue": "default"},
 }
 
 celery_app.conf.beat_schedule = {

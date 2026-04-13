@@ -16,7 +16,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     username: Mapped[str] = mapped_column(String(100), unique=True)
     hashed_password: Mapped[str | None] = mapped_column(Text)  # None for OAuth users
     google_id: Mapped[str | None] = mapped_column(String(255), unique=True)
