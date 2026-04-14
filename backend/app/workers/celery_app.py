@@ -8,6 +8,7 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.redis_url,
     include=["app.workers.tasks"],
+    
 )
 
 celery_app.conf.task_routes = {
@@ -22,5 +23,6 @@ celery_app.conf.beat_schedule = {
     "fetch-all-sources": {
         "task": "app.workers.tasks.fetch_sources",
         "schedule": crontab(minute="*/15"),  # every 15 min
+        'options': {'expires': 14 * 60},  # задача протухает через 14 минут
     },
 }

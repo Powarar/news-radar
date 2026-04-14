@@ -1,19 +1,28 @@
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.core.config import settings
+from app.models.news import NewsItem  # noqa: F401
+from app.models.source import Source, SourceType
+from app.models.user import User  # noqa: F401
 from app.workers.celery_app import celery_app
 
+engine = create_engine(settings.database_url_sync)
+SyncSessionLocal = sessionmaker(engine)
+
+
+# ─────────────────────────────────────────────────────────────
+#  fetch_sources — запускается по расписанию каждые 15 минут
+# ─────────────────────────────────────────────────────────────
 
 @celery_app.task(name="app.workers.tasks.fetch_sources")
 def fetch_sources():
-    from sqlalchemy import create_engine, select
-    from sqlalchemy.orm import Session
+    """
+    Смотрит все активные источники в БД и запускает
+    отдельную задачу для каждого.
+    """
 
-    from app.core.config import settings
-    from app.models.news import NewsItem  # noqa: F401
-    from app.models.source import Source, SourceType
-    from app.models.user import User  # noqa: F401
-
-    engine = create_engine(settings.database_url_sync)
-
-    with Session(engine) as session:
+    with SyncSessionLocal() as session:
         sources = session.execute(
             select(Source).where(Source.is_active == True)
         ).scalars().all()
@@ -25,7 +34,18 @@ def fetch_sources():
                 fetch_website.delay(source.id)
 
 
+# ─────────────────────────────────────────────────────────────
+#  _should_skip — проверяем не слишком ли рано снова парсить
+# ─────────────────────────────────────────────────────────────
+
 def _should_skip(source) -> bool:
+    """
+    Возвращает True если источник парсили недавно.
+
+    Зачем: Beat запускает fetch_sources каждые 15 минут,
+    но у разных источников разный fetch_interval_minutes.
+    Например канал который обновляется раз в час — не нужно парсить каждые 15 минут.
+    """
     from datetime import datetime, timezone, timedelta
     if source.last_fetched_at is None:
         return False
@@ -33,21 +53,21 @@ def _should_skip(source) -> bool:
     return datetime.now(timezone.utc) - source.last_fetched_at < interval
 
 
+# ─────────────────────────────────────────────────────────────
+#  fetch_telegram_channel — парсит один Telegram-канал
+# ─────────────────────────────────────────────────────────────
+
 @celery_app.task(name="app.workers.tasks.fetch_telegram_channel")
 def fetch_telegram_channel(source_id: int):
+    """
+    Парсит публичный Telegram-канал через t.me/s/<channel>.
+    Сохраняет только новые посты (проверяет по url).
+    """
     from datetime import datetime, timezone
-    from sqlalchemy import create_engine, select
-    from sqlalchemy.orm import Session
-
-    from app.core.config import settings
     from app.models.news import NewsItem
-    from app.models.source import Source
-    from app.models.user import User  # noqa: F401
     from app.services.parser.telegram import parse_channel
 
-    engine = create_engine(settings.database_url_sync)
-
-    with Session(engine) as session:
+    with SyncSessionLocal() as session:
         source = session.get(Source, source_id)
         if not source or not source.is_active:
             return
@@ -72,6 +92,7 @@ def fetch_telegram_channel(source_id: int):
             if exists:
                 continue
 
+            # Парсим дату
             published_at = None
             if post["published_at"]:
                 try:
@@ -96,21 +117,21 @@ def fetch_telegram_channel(source_id: int):
         return f"Saved {saved} new posts from @{channel}"
 
 
+# ─────────────────────────────────────────────────────────────
+#  fetch_website — парсит сайт или RSS-ленту
+# ─────────────────────────────────────────────────────────────
+
 @celery_app.task(name="app.workers.tasks.fetch_website")
 def fetch_website(source_id: int):
+    """
+    Парсит сайт: сначала ищет RSS,
+    при неудаче — скрапит HTML страницу.
+    """
     from datetime import datetime, timezone
-    from sqlalchemy import create_engine, select
-    from sqlalchemy.orm import Session
-
-    from app.core.config import settings
     from app.models.news import NewsItem
-    from app.models.source import Source
-    from app.models.user import User  # noqa: F401
     from app.services.parser.web import fetch_site
 
-    engine = create_engine(settings.database_url_sync)
-
-    with Session(engine) as session:
+    with SyncSessionLocal() as session:
         source = session.get(Source, source_id)
         if not source or not source.is_active:
             return
@@ -156,13 +177,19 @@ def fetch_website(source_id: int):
         return f"Saved {saved} new items from {source.url}"
 
 
+# ─────────────────────────────────────────────────────────────
+#  process_news_ai — AI обработка (топики, важность, саммари)
+# ─────────────────────────────────────────────────────────────
+
 @celery_app.task(name="app.workers.tasks.process_news_ai")
 def process_news_ai(news_item_id: int):
-    # TODO: HuggingFace classifier + summarizer + importance score
+    """Classify topics, score importance, generate summary via HuggingFace."""
+    # TODO: реализуем когда подключим HuggingFace токен
     pass
 
 
 @celery_app.task(name="app.workers.tasks.send_notifications")
 def send_notifications(news_item_id: int):
-    # TODO: push to matched users via TG bot
+    """Push relevant news to matched users via TG bot."""
+    # TODO: реализуем когда сделаем бота
     pass
