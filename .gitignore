@@ -12,7 +12,7 @@ dist/
 *.egg-info/
 
 # Alembic
-alembic/versions/*.py
+# alembic/versions/*.py  — migrations must be in git
 
 # Node
 node_modules/
