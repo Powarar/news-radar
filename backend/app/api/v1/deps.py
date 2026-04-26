@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User
+from app.core import redis
 
 bearer = HTTPBearer()
 
@@ -19,6 +20,8 @@ async def get_current_user(
 ) -> User:
     try:
         payload = decode_token(credentials.credentials)
+        if await redis.exists(f"blacklist:{credentials.credentials}"):                                                                                
+            raise HTTPException(401, "Token revoked")
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 

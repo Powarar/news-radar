@@ -1,10 +1,18 @@
+from datetime import datetime, timezone
 import json
 import secrets
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import security
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token, 
+    hash_password,
+    verify_password,
+    verify_telegram_hash
+)
 from app.core.redis import redis
 from app.core.config import settings
 from app.repositories.user import UserRepository
@@ -21,7 +29,7 @@ class AuthService:
         if await self.repo.get_by_username(data.username):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
 
-        hashed = security.hash_password(data.password)
+        hashed = hash_password(data.password)
         user = await self.repo.create(data.email, data.username, hashed)
         return self._make_tokens(user.id)
 
@@ -29,7 +37,7 @@ class AuthService:
         user = await self.repo.get_by_email(data.email)
         if not user or not user.hashed_password:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-        if not security.verify_password(data.password, user.hashed_password):
+        if not verify_password(data.password, user.hashed_password):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
@@ -67,7 +75,7 @@ class AuthService:
         return code
 
     async def telegram_login(self, data: dict) -> TokenResponse:
-        if not security.verify_telegram_hash(data):
+        if not verify_telegram_hash(data):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Telegram data")
 
         telegram_id = str(data["id"])
@@ -98,7 +106,7 @@ class AuthService:
 
     async def refresh(self, data: RefreshRequest) -> TokenResponse:
         try:
-            payload = security.decode_token(data.refresh_token)
+            payload = decode_token(data.refresh_token)
         except Exception:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
         if payload.get("type") != "refresh":
@@ -109,6 +117,14 @@ class AuthService:
     def _make_tokens(user_id: int) -> TokenResponse:
         subject = str(user_id)
         return TokenResponse(
-            access_token=security.create_access_token(subject),
-            refresh_token=security.create_refresh_token(subject),
+            access_token=create_access_token(subject),
+            refresh_token=create_refresh_token(subject),
         )
+
+    async def logout(self, token: str) -> None:
+        payload = decode_token(token)
+        ttl = payload["exp"] - int(datetime.now(timezone.utc).timestamp())
+
+        if ttl > 0:
+            await redis.setex(f"blacklist:{token}", ttl, "1")
+        return

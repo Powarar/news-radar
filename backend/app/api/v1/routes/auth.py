@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
@@ -10,6 +11,8 @@ from app.core.database import get_db
 from app.schemas.auth import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, OAuthCodeRequest
 from app.services.auth import AuthService
 from app.core.config import settings
+from app.api.v1.deps import bearer
+
 
 router = APIRouter()
 
@@ -89,7 +92,10 @@ async def exchange_oauth_code(
     return await service.exchange_oauth_code(data.code)
 
 
-@router.post("/logout")
-async def logout():
-    # TODO: token blacklist (Redis)
-    pass
+@router.post("/logout", status_code=204)
+async def logout(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)],
+    service: Annotated[AuthService, Depends(get_auth_service)]
+):
+    return await service.logout(credentials.credentials)
+    
