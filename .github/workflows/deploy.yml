@@ -18,5 +18,5 @@ jobs:
           script: |
             cd ~/news-radar
             git pull origin main
-            docker compose -f docker-compose.prod.yml up --build -d
-            docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
+            docker-compose -f docker-compose.prod.yml up --build -d
+            docker-compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
