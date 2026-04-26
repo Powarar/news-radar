@@ -60,8 +60,6 @@ services:
       - "80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./nginx/ssl:/etc/nginx/ssl
-      - frontend_build:/usr/share/nginx/html
     depends_on:
       - backend
       - frontend
@@ -70,4 +68,3 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  frontend_build:
