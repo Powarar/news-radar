@@ -2,9 +2,6 @@
 
 ---
 
-## Шаг 1 — Починить текущие баги
-
-- [ ] `auth.py` (сервис) — исправить `self` и скобку в `logout()`
 - [ ] CORS — убрать `allow_origins=["*"]`, прописать конкретные домены
 
 ---
@@ -14,7 +11,7 @@
 - [ ] `GET /preferences/` — вернуть топики пользователя с весами
 - [ ] `PUT /preferences/` — обновить веса топиков
 - [ ] `GET /news/` — добавить фильтрацию по предпочтениям пользователя и языку
-- [ ] `classifier.py` — HTTP вызов HuggingFace Inference API (`facebook/bart-large-mnli`)
+- [V] `classifier.py` — HTTP вызов HuggingFace Inference API (`facebook/bart-large-mnli`)
 - [ ] `summarizer.py` — HTTP вызов HuggingFace Inference API (`csebuetnlp/mT5_multilingual_XLSum`)
 - [ ] `importance.py` — формула: `max_topic * 0.6 + log(reach) * 0.3 + reactions * 0.1`
 - [ ] `process_news_ai()` task — вызвать classifier + summarizer + importance, сохранить в `NewsItem`

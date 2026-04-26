@@ -53,8 +53,8 @@ class Settings(BaseSettings):
 
     # HuggingFace
     huggingface_api_token: str = ""
-    hf_classifier_model: str = "facebook/bart-large-mnli"
-    hf_summarizer_model: str = "csebuetnlp/mT5_multilingual_XLSum"
+    hf_classifier_model_url: str = ""
+    hf_summarizer_model_url: str = ""
 
 
 settings = Settings()
