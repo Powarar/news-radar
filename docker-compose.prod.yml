@@ -44,6 +44,10 @@ services:
     build:
       context: ./frontend
       target: prod
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_TG_BOT_USERNAME: ${VITE_TG_BOT_USERNAME}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
     restart: always
 
   bot:
