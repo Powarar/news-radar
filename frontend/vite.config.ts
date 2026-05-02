@@ -6,8 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
-      selfDestroying: true,
+      injectRegister: false,
       manifest: {
         name: "News Radar",
         short_name: "NewsRadar",
