@@ -8,7 +8,7 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       workbox: {
-        navigateFallbackDenylist: [/^\/api\//],
+        navigateFallback: null,
       },
       manifest: {
         name: "News Radar",

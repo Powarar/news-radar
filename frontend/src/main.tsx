@@ -5,6 +5,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
 import "./styles/global.css";
 
+// One-time cleanup of old SW that had navigateFallback intercepting /api/ routes
+if ("serviceWorker" in navigator && !localStorage.getItem("sw_reset_v2")) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((r) => r.unregister());
+    localStorage.setItem("sw_reset_v2", "1");
+  });
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 60_000, retry: 1 },
