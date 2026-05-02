@@ -325,16 +325,13 @@ function OAuthCallback() {
   const location = useLocation();
 
   useEffect(() => {
-    // StrictMode double-invokes effects — skip if token already saved
-    if (localStorage.getItem("access_token")) {
-      navigate("/feed", { replace: true });
-      return;
-    }
-
     const params = new URLSearchParams(location.search);
     const code = params.get("code");
     if (!code) { navigate("/login", { replace: true }); return; }
     window.history.replaceState({}, "", "/oauth/callback");
+    // clear any existing tokens before exchanging the new code
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
     api.post<{ access_token: string; refresh_token: string }>("/v1/auth/exchange", { code })
       .then((r) => {
         localStorage.setItem("access_token", r.data.access_token);
