@@ -1,13 +1,13 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 from app.models.user import UserPlan
 
 
 class UserResponse(BaseModel):
     id: int
-    email: EmailStr
+    email: str | None
     username: str
     is_active: bool
     plan: UserPlan
