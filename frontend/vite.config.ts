@@ -7,9 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      workbox: {
-        navigateFallback: null,
-      },
+      selfDestroying: true,
       manifest: {
         name: "News Radar",
         short_name: "NewsRadar",
