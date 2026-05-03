@@ -11,10 +11,10 @@
 - [ ] `GET /preferences/` — вернуть топики пользователя с весами
 - [ ] `PUT /preferences/` — обновить веса топиков
 - [ ] `GET /news/` — добавить фильтрацию по предпочтениям пользователя и языку
-- [V] `classifier.py` — HTTP вызов HuggingFace Inference API (`facebook/bart-large-mnli`)
-- [ ] `summarizer.py` — HTTP вызов HuggingFace Inference API (`csebuetnlp/mT5_multilingual_XLSum`)
-- [ ] `importance.py` — формула: `max_topic * 0.6 + log(reach) * 0.3 + reactions * 0.1`
-- [ ] `process_news_ai()` task — вызвать classifier + summarizer + importance, сохранить в `NewsItem`
+- [x] `classifier.py` — HTTP вызов HuggingFace Inference API (`facebook/bart-large-mnli`)
+- [x] `summarizer.py` — HTTP вызов HuggingFace Inference API (`csebuetnlp/mT5_multilingual_XLSum`)
+- [x] `importance.py` — базовая формула (`max_topic * 0.6`), полная — в Шаге 8
+- [x] `process_news_ai()` task — classifier + summarizer параллельно через gather, сохранить в `NewsItem`
 - [ ] Индексы в БД — добавить на `news_items.published_at`, `news_items.language`
 - [ ] Frontend: страница предпочтений — выбор топиков и весов (слайдеры)
 - [ ] Frontend: token refresh flow — retry с `refresh_token` при 401 вместо сразу логаута
@@ -23,7 +23,7 @@
 
 ## Шаг 3 — Полный функционал
 
-- [ ] `POST /news/{id}/react` — like / dislike / blacklist
+- [x] `POST /news/{id}/react` — like / dislike / blacklist
 - [ ] Unique constraint `(user_id, news_item_id)` на `news_reactions`
 - [ ] `GET /sources/` — список источников с настройками пользователя
 - [ ] `POST /sources/` — добавить источник
@@ -31,7 +31,7 @@
 - [ ] `PATCH /sources/{id}/blacklist` — заблокировать источник
 - [ ] `send_notifications()` task — найти юзеров по топикам, отправить через бота
 - [ ] Rate limiting на `/login` и `/register`
-- [ ] Frontend: реакции на карточке новости — кнопки like / dislike / blacklist
+- [x] Frontend: реакции на карточке новости — кнопки like / dislike / blacklist
 - [ ] Frontend: страница источников — список с переключателями
 
 ---
@@ -92,7 +92,7 @@
 - [ ] Кеш новостей в Redis — не ходить в БД при каждом запросе ленты
 - [ ] React Query — заменить `useEffect + fetch` на `useQuery` / `useMutation`
 - [ ] Кастомные хуки — вынести логику из компонентов (`useAuth`, `useFeed`, `usePreferences`)
-- [ ] Оптимистичные обновления — реакция применяется сразу, без ожидания сервера
+- [x] Оптимистичные обновления — реакция применяется сразу, без ожидания сервера
 - [ ] `select_in_loading` вместо `joined_loading` где есть N+1 запросы
 - [ ] Error boundary — глобальный обработчик ошибок в React UI
 - [ ] PWA — проверить что манифест и service worker работают корректно
