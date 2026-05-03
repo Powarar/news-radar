@@ -117,23 +117,42 @@ function NewsCard({
         {user && (
           <div style={s.reactionRow}>
             <button
-              style={localReaction === "like" ? s.reactionBtnActive : s.reactionBtn}
+              style={{ ...s.reactionBtn, ...(localReaction === "like" ? s.reactionLike : {}) }}
               onClick={() => handleReact("like")}
               disabled={loading}
               title="Нравится"
-            >👍</button>
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 13s1.5 2 4 2 4-2 4-2"/>
+                <line x1="9" y1="9" x2="9.01" y2="9"/>
+                <line x1="15" y1="9" x2="15.01" y2="9"/>
+              </svg>
+            </button>
             <button
-              style={localReaction === "dislike" ? s.reactionBtnActive : s.reactionBtn}
+              style={{ ...s.reactionBtn, ...(localReaction === "dislike" ? s.reactionDislike : {}) }}
               onClick={() => handleReact("dislike")}
               disabled={loading}
               title="Не нравится"
-            >👎</button>
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M16 16s-1.5-2-4-2-4 2-4 2"/>
+                <line x1="9" y1="9" x2="9.01" y2="9"/>
+                <line x1="15" y1="9" x2="15.01" y2="9"/>
+              </svg>
+            </button>
             <button
               style={s.reactionBtn}
               onClick={() => handleReact("blacklist")}
               disabled={loading}
               title="Скрыть канал"
-            >🚫</button>
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+              </svg>
+            </button>
           </div>
         )}
       </div>
@@ -573,19 +592,20 @@ const s: Record<string, React.CSSProperties> = {
     background: "transparent",
     border: "1px solid var(--border)",
     borderRadius: "var(--radius-sm)",
-    padding: "4px 8px",
+    padding: "5px 8px",
     cursor: "pointer",
-    fontSize: 15,
-    lineHeight: 1,
+    color: "var(--text-muted)",
+    display: "flex",
+    alignItems: "center",
+    transition: "color 0.15s, border-color 0.15s",
   },
-  reactionBtnActive: {
-    background: "var(--bg-elevated)",
-    border: "1px solid var(--accent)",
-    borderRadius: "var(--radius-sm)",
-    padding: "4px 8px",
-    cursor: "pointer",
-    fontSize: 15,
-    lineHeight: 1,
+  reactionLike: {
+    color: "var(--success)",
+    borderColor: "var(--success)",
+  },
+  reactionDislike: {
+    color: "var(--danger)",
+    borderColor: "var(--danger)",
   },
 
   endMsg: {

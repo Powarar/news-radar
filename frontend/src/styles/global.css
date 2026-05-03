@@ -1,15 +1,15 @@
 /* Design tokens */
 :root {
-  --bg: #0f172a;
-  --bg-card: #1e293b;
-  --bg-elevated: #273349;
-  --text: #f1f5f9;
-  --text-muted: #94a3b8;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --danger: #ef4444;
-  --success: #22c55e;
-  --border: #334155;
+  --bg: #111110;
+  --bg-card: #1c1c1a;
+  --bg-elevated: #252523;
+  --text: #eeeeec;
+  --text-muted: #888884;
+  --accent: #e79b47;
+  --accent-hover: #d4883a;
+  --danger: #e05252;
+  --success: #4caf7d;
+  --border: #2e2e2c;
   --radius: 12px;
   --radius-sm: 6px;
   --font: "Inter", system-ui, sans-serif;
