@@ -27,54 +27,40 @@ TOPICS = [
     "environment",
 ]
 
-_session: aiohttp.ClientSession | None = None
-
-
-def _get_session() -> aiohttp.ClientSession:
-    global _session
-    if _session is None or _session.closed:
-        _session = aiohttp.ClientSession(
-            headers={
-                "Authorization": f"Bearer {settings.huggingface_api_token}",
-                "Content-Type": "application/json",
-            },
-            timeout=aiohttp.ClientTimeout(total=30),
-        )
-    return _session
-
-
 async def classify(text: str, retries: int = 3) -> dict[str, float]:
     payload = {
         "inputs": text[:_MAX_CHARS],
         "parameters": {"candidate_labels": TOPICS},
     }
+    headers = {
+        "Authorization": f"Bearer {settings.huggingface_api_token}",
+        "Content-Type": "application/json",
+    }
 
     last_exc: Exception | None = None
-    for attempt in range(retries):
-        try:
-            async with _get_session().post(settings.hf_classifier_model_url, json=payload) as resp:
-                if resp.status == 503:
-                    # Model is loading — HF returns estimated_time in body
+    async with aiohttp.ClientSession(headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as session:
+        for attempt in range(retries):
+            try:
+                async with session.post(settings.hf_classifier_model_url, json=payload) as resp:
+                    if resp.status == 503:
+                        data = await resp.json()
+                        wait = float(data.get("estimated_time", 20))
+                        logger.warning("HF model loading, waiting %.1fs (attempt %d)", wait, attempt + 1)
+                        await asyncio.sleep(min(wait, 60))
+                        continue
+
+                    resp.raise_for_status()
                     data = await resp.json()
-                    wait = float(data.get("estimated_time", 20))
-                    logger.warning("HF model loading, waiting %.1fs (attempt %d)", wait, attempt + 1)
-                    await asyncio.sleep(min(wait, 60))
-                    continue
 
-                resp.raise_for_status()
-                data = await resp.json()
+            except aiohttp.ClientError as exc:
+                last_exc = exc
+                backoff = 2**attempt
+                logger.warning("HF request failed (attempt %d): %s — retrying in %ds", attempt + 1, exc, backoff)
+                await asyncio.sleep(backoff)
+                continue
 
-        except aiohttp.ClientError as exc:
-            last_exc = exc
-            backoff = 2**attempt
-            logger.warning("HF request failed (attempt %d): %s — retrying in %ds", attempt + 1, exc, backoff)
-            await asyncio.sleep(backoff)
-            continue
+            if isinstance(data, list):
+                return {item["label"]: item["score"] for item in data}
+            return dict(zip(data["labels"], data["scores"]))
 
-        # new API returns [{"label": ..., "score": ...}, ...]
-        if isinstance(data, list):
-            return {item["label"]: item["score"] for item in data}
-        # old API fallback: {"labels": [...], "scores": [...]}
-        return dict(zip(data["labels"], data["scores"]))
-
-    raise RuntimeError(f"classify failed after {retries} attempts") from last_exc
+        raise RuntimeError(f"classify failed after {retries} attempts") from last_exc

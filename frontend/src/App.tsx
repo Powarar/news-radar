@@ -31,7 +31,24 @@ function NavBar() {
   );
 }
 
-function NewsCard({ item }: { item: NewsItem }) {
+const TOPIC_LABELS: Record<string, string> = {
+  politics: "политика", military: "военное", technology: "технологии",
+  health: "здоровье", science: "наука", business: "бизнес",
+  sports: "спорт", culture: "культура", environment: "экология",
+};
+
+function NewsCard({
+  item,
+  user,
+  onReact,
+}: {
+  item: NewsItem;
+  user: User | null;
+  onReact: (newsId: number, reaction: string) => Promise<void>;
+}) {
+  const [localReaction, setLocalReaction] = useState<string | null>(item.reaction ?? null);
+  const [loading, setLoading] = useState(false);
+
   function timeAgo(iso: string) {
     const diff = Date.now() - new Date(iso).getTime();
     const min = Math.floor(diff / 60_000);
@@ -42,9 +59,23 @@ function NewsCard({ item }: { item: NewsItem }) {
     return `${Math.floor(h / 24)} д назад`;
   }
 
-  const preview = item.body.length > 280
-    ? item.body.slice(0, 280) + "…"
-    : item.body;
+  async function handleReact(reaction: string) {
+    if (!user || loading) return;
+    setLoading(true);
+    try {
+      await onReact(item.id, reaction);
+      if (reaction !== "blacklist") setLocalReaction(reaction);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const text = item.summary ?? (item.body.length > 280 ? item.body.slice(0, 280) + "…" : item.body);
+
+  const topTopics = Object.entries(item.topics)
+    .filter(([, score]) => score > 0.3)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3);
 
   return (
     <article style={s.card}>
@@ -64,13 +95,48 @@ function NewsCard({ item }: { item: NewsItem }) {
 
       {item.title && <h2 style={s.cardTitle}>{item.title}</h2>}
 
-      <p style={s.cardBody}>{preview}</p>
+      <p style={s.cardBody}>{text}</p>
 
-      {item.url && (
-        <a href={item.url} target="_blank" rel="noreferrer" style={s.readMore}>
-          Читать оригинал →
-        </a>
+      {topTopics.length > 0 && (
+        <div style={s.topicsRow}>
+          {topTopics.map(([topic]) => (
+            <span key={topic} style={s.topicChip}>
+              {TOPIC_LABELS[topic] ?? topic}
+            </span>
+          ))}
+        </div>
       )}
+
+      <div style={s.cardFooter}>
+        {item.url && (
+          <a href={item.url} target="_blank" rel="noreferrer" style={s.readMore}>
+            Читать оригинал →
+          </a>
+        )}
+
+        {user && (
+          <div style={s.reactionRow}>
+            <button
+              style={localReaction === "like" ? s.reactionBtnActive : s.reactionBtn}
+              onClick={() => handleReact("like")}
+              disabled={loading}
+              title="Нравится"
+            >👍</button>
+            <button
+              style={localReaction === "dislike" ? s.reactionBtnActive : s.reactionBtn}
+              onClick={() => handleReact("dislike")}
+              disabled={loading}
+              title="Не нравится"
+            >👎</button>
+            <button
+              style={s.reactionBtn}
+              onClick={() => handleReact("blacklist")}
+              disabled={loading}
+              title="Скрыть канал"
+            >🚫</button>
+          </div>
+        )}
+      </div>
     </article>
   );
 }
@@ -78,6 +144,7 @@ function NewsCard({ item }: { item: NewsItem }) {
 const LIMIT = 20;
 
 function FeedPage() {
+  const { user } = useUser();
   const [items, setItems] = useState<NewsItem[]>([]);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
@@ -100,6 +167,16 @@ function FeedPage() {
 
   useEffect(() => { loadPage(0); }, []);
 
+  async function handleReact(newsId: number, reaction: string) {
+    await api.post(`/v1/news/${newsId}/react`, { reaction });
+    if (reaction === "blacklist") {
+      const sourceId = items.find(x => x.id === newsId)?.source.id;
+      setItems(prev => prev.filter(i => i.source.id !== sourceId));
+    } else {
+      setItems(prev => prev.map(i => i.id === newsId ? { ...i, reaction: reaction as NewsItem["reaction"] } : i));
+    }
+  }
+
   const totalPages = Math.ceil(total / LIMIT);
 
   return (
@@ -117,7 +194,9 @@ function FeedPage() {
 
         {loading && <div style={s.endMsg}>Загрузка…</div>}
 
-        {!loading && items.map(item => <NewsCard key={item.id} item={item} />)}
+        {!loading && items.map(item => (
+          <NewsCard key={item.id} item={item} user={user} onReact={handleReact} />
+        ))}
 
         {totalPages > 1 && (
           <div style={s.pagination}>
@@ -463,8 +542,50 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     color: "var(--accent)",
     textDecoration: "none",
+  },
+
+  topicsRow: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: 6,
+  },
+  topicChip: {
+    fontSize: 11,
+    fontWeight: 500,
+    padding: "2px 8px",
+    borderRadius: 20,
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
+    color: "var(--text-muted)",
+  },
+
+  cardFooter: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginTop: 4,
-    alignSelf: "flex-start",
+  },
+  reactionRow: {
+    display: "flex",
+    gap: 4,
+  },
+  reactionBtn: {
+    background: "transparent",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-sm)",
+    padding: "4px 8px",
+    cursor: "pointer",
+    fontSize: 15,
+    lineHeight: 1,
+  },
+  reactionBtnActive: {
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--accent)",
+    borderRadius: "var(--radius-sm)",
+    padding: "4px 8px",
+    cursor: "pointer",
+    fontSize: 15,
+    lineHeight: 1,
   },
 
   endMsg: {

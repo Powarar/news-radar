@@ -1,11 +1,17 @@
+import asyncio
+import json
+
 from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.models.news import NewsItem  # noqa: F401
 from app.models.source import Source, SourceType
-from app.models.user import User  # noqa: F401
+from app.models.user import User, UserTopicPreference  # noqa: F401
 from app.workers.celery_app import celery_app
+from app.services.ai.classifier import classify
+from app.services.ai.importance import score_importance
+from app.services.ai.summarizer import summarize
 
 engine = create_engine(settings.database_url_sync)
 SyncSessionLocal = sessionmaker(engine)
@@ -181,11 +187,58 @@ def fetch_website(source_id: int):
 #  process_news_ai — AI обработка (топики, важность, саммари)
 # ─────────────────────────────────────────────────────────────
 
+
+async def _process(text):                                                                                                                                                               
+    topics, summary = await asyncio.gather(classify(text), summarize(text))                                                                                                             
+    return topics, summary 
+
 @celery_app.task(name="app.workers.tasks.process_news_ai")
-def process_news_ai(news_item_id: int):
+def process_news_ai(news_id: int):
     """Classify topics, score importance, generate summary via HuggingFace."""
-    # TODO: реализуем когда подключим HuggingFace токен
-    pass
+    with SyncSessionLocal() as session:
+        news = session.scalar(select(NewsItem).where(NewsItem.id == news_id))
+        if not news:
+            return
+        text = (news.title or "") + " " + news.body
+        
+        topics, summary = asyncio.run(_process(text))
+
+        news.topics = json.dumps(topics)
+        news.summary = summary
+        news.importance_score = score_importance(topics)
+        session.commit()
+
+# ─────────────────────────────────────────────────────────────
+#  update_topic_preferences — обновляет веса топиков юзера
+# ─────────────────────────────────────────────────────────────
+
+@celery_app.task(name="app.workers.tasks.update_topic_preferences")
+def update_topic_preferences(user_id: int, news_id: int, reaction: str):
+    with SyncSessionLocal() as session:
+        item = session.scalar(select(NewsItem).where(NewsItem.id == news_id))
+        if not item or not item.topics:
+            return
+
+        news_topics = json.loads(item.topics)  # {"politics": 0.9, "military": 0.6}
+        delta = 0.1 if reaction == "like" else -0.1
+
+        for topic, score in news_topics.items():
+            if score < 0.3:
+                continue
+
+            pref = session.scalar(
+                select(UserTopicPreference).where(
+                    UserTopicPreference.user_id == user_id,
+                    UserTopicPreference.topic == topic,
+                )
+            )
+            if not pref:
+                pref = UserTopicPreference(user_id=user_id, topic=topic, weight=0.5)
+                session.add(pref)
+
+            pref.weight = max(0.0, min(1.0, pref.weight + delta * score))
+
+        session.commit()
 
 
 @celery_app.task(name="app.workers.tasks.send_notifications")

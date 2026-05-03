@@ -18,7 +18,7 @@ app.add_middleware(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.debug else ["https://yourdomain.com"],
+    allow_origins=["*"] if settings.debug else ["https://news.safonovpavel.space"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
