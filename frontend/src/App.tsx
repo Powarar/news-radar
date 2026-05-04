@@ -73,9 +73,9 @@ function NewsCard({
   const text = item.summary ?? (item.body.length > 280 ? item.body.slice(0, 280) + "…" : item.body);
 
   const topTopics = Object.entries(item.topics)
-    .filter(([, score]) => score > 0.3)
     .sort(([, a], [, b]) => b - a)
-    .slice(0, 3);
+    .slice(0, 3)
+    .filter(([, score]) => score > 0.15);
 
   return (
     <article style={s.card}>

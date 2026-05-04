@@ -1,5 +1,8 @@
 import asyncio
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -115,6 +118,8 @@ def fetch_telegram_channel(source_id: int):
                 published_at=published_at,
             )
             session.add(news)
+            session.flush()
+            process_news_ai.delay(news.id)
             saved += 1
 
         source.last_fetched_at = datetime.now(timezone.utc)
@@ -175,6 +180,8 @@ def fetch_website(source_id: int):
                 published_at=published_at,
             )
             session.add(news)
+            session.flush()
+            process_news_ai.delay(news.id)
             saved += 1
 
         source.last_fetched_at = datetime.now(timezone.utc)
@@ -200,8 +207,12 @@ def process_news_ai(news_id: int):
         if not news:
             return
         text = (news.title or "") + " " + news.body
-        
-        topics, summary = asyncio.run(_process(text))
+
+        try:
+            topics, summary = asyncio.run(_process(text))
+        except Exception:
+            logger.exception("AI processing failed for news_id=%d, saving without AI", news_id)
+            topics, summary = {}, None
 
         news.topics = json.dumps(topics)
         news.summary = summary
