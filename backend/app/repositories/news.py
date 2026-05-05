@@ -20,7 +20,7 @@ class NewsRepository:
         if user_id:
             blacklisted_sq = (
                 select(UserSourceSetting.source_id)
-                .where(UserSourceSetting.user_id == user_id, UserSourceSetting.blacklisted == True)
+                .where(UserSourceSetting.user_id == user_id, UserSourceSetting.blacklisted)
                 .scalar_subquery()
             )
             stmt = stmt.where(NewsItem.source_id.not_in(blacklisted_sq))

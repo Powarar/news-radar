@@ -2,8 +2,6 @@ import asyncio
 import json
 import logging
 
-logger = logging.getLogger(__name__)
-
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
@@ -15,6 +13,8 @@ from app.workers.celery_app import celery_app
 from app.services.ai.classifier import classify
 from app.services.ai.importance import score_importance
 from app.services.ai.summarizer import summarize
+
+logger = logging.getLogger(__name__)
 
 engine = create_engine(settings.database_url_sync)
 SyncSessionLocal = sessionmaker(engine)
@@ -33,7 +33,7 @@ def fetch_sources():
 
     with SyncSessionLocal() as session:
         sources = session.execute(
-            select(Source).where(Source.is_active == True)
+            select(Source).where(Source.is_active)
         ).scalars().all()
 
         for source in sources:

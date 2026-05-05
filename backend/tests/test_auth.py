@@ -1,5 +1,3 @@
-import pytest
-
 BASE = "/api/v1/auth"
 
 USER = {
