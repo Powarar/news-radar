@@ -27,9 +27,6 @@ jobs:
           POSTGRES_USER: newsradar                                                                                                                    
           POSTGRES_PASSWORD: newsradar
           POSTGRES_DB: newsradar
-          POSTGRES_HOST: localhost
-          OAUTH_CODE_TTL: 30
-
         ports:
           - 5432:5432
         options: >-
@@ -49,8 +46,12 @@ jobs:
       - run: pytest
         working-directory: backend                                                                                                                    
         env:        
-          DATABASE_URL: postgresql+asyncpg://newsradar:newsradar@localhost:5432/newsradar
-
+          SECRET_KEY: secret-key-for-ci
+          OAUTH_CODE_TTL: 300                                                                                                                     
+          POSTGRES_PASSWORD: newsradar
+          POSTGRES_HOST: localhost                                                                                                                
+          POSTGRES_USER: newsradar                                                                                                                
+          POSTGRES_DB: newsradar
   deploy:
     needs: [lint, test]
     runs-on: ubuntu-latest
