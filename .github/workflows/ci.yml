@@ -27,6 +27,9 @@ jobs:
           POSTGRES_USER: newsradar                                                                                                                    
           POSTGRES_PASSWORD: newsradar
           POSTGRES_DB: newsradar
+          POSTGRES_HOST: localhost
+          OAUTH_CODE_TTL: 30
+
         ports:
           - 5432:5432
         options: >-
