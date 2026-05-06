@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import secrets
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -34,7 +35,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 def create_access_token(subject: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     return jwt.encode(
-        {"sub": subject, "exp": expire, "type": "access"},
+        {"sub": subject, "exp": expire, "jti": secrets.token_hex(8), "type": "access"},
         settings.secret_key,
         algorithm=ALGORITHM,
     )
@@ -43,7 +44,7 @@ def create_access_token(subject: str) -> str:
 def create_refresh_token(subject: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     return jwt.encode(
-        {"sub": subject, "exp": expire, "type": "refresh"},
+        {"sub": subject, "exp": expire, "jti": secrets.token_hex(8), "type": "refresh"},
         settings.secret_key,
         algorithm=ALGORITHM,
     )
