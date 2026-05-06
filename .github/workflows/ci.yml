@@ -41,17 +41,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('backend/requirements*.txt') }}
+          restore-keys: pip-
       - run: pip install -r requirements.txt -r requirements-dev.txt
         working-directory: backend
       - run: pytest
         working-directory: backend                                                                                                                    
-        env:        
+        env:
           SECRET_KEY: secret-key-for-ci
-          OAUTH_CODE_TTL: 300                                                                                                                     
+          OAUTH_CODE_TTL: 300
           POSTGRES_PASSWORD: newsradar
-          POSTGRES_HOST: localhost                                                                                                                
-          POSTGRES_USER: newsradar                                                                                                                
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: newsradar
           POSTGRES_DB: newsradar
+          TEST_DATABASE_URL: postgresql+asyncpg://newsradar:newsradar@localhost:5432/newsradar
   deploy:
     needs: [lint, test]
     runs-on: ubuntu-latest
