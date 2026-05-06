@@ -5,6 +5,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.core.database import Base, get_db
 from app.main import app  # noqa: F401 — импорт регистрирует все модели
@@ -17,7 +18,7 @@ TEST_DATABASE_URL = os.getenv(
 
 @pytest_asyncio.fixture(scope="session")
 async def engine():
-    eng = create_async_engine(TEST_DATABASE_URL)
+    eng = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield eng

@@ -11,6 +11,10 @@ venv/
 dist/
 *.egg-info/
 
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
 # Alembic
 # alembic/versions/*.py  — migrations must be in git
 
