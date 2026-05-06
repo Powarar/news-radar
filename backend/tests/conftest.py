@@ -32,10 +32,10 @@ async def db_session(engine):
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         yield session
-        await session.rollback()
+    async with factory() as cleanup:
         for table in reversed(Base.metadata.sorted_tables):
-            await session.execute(table.delete())
-        await session.commit()
+            await cleanup.execute(table.delete())
+        await cleanup.commit()
 
 
 @pytest.fixture
