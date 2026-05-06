@@ -19,21 +19,29 @@ async def cmd_start(message: Message):
 
 @router.message(Command("top"))
 async def cmd_top(message: Message):
-
-    await message.answer("Fetching top news...")
     async with AsyncClient() as client:
-        response = await client.get(os.environ.get('BACKEND_URL', 'http://backend:8000') + '/api/v1/news?limit=5')
-        if response.status_code == 200:
-            news_items = response.json().get('items', [])
-            if news_items:
-                for item in news_items:
-                    parts = []
-                    if item.get('title'):                                                                                                                             
-                        parts.append(item['title'])
-                    parts.append(item.get('summary') or item.get('body', ''))                                                                                         
-                    if item.get('url'):
-                        parts.append(item['url'])
-                    text = '\n'.join(parts) 
-                    await message.answer(text)
-            else:
-                await message.answer("No news found.")
+        response = await client.get(
+            os.environ.get('BACKEND_URL', 'http://backend:8000') + '/api/v1/news/',
+            params={"limit": 5},
+        )
+
+    if response.status_code != 200:
+        await message.answer("Failed to fetch news.")
+        return
+
+    news_items = response.json().get('items', [])
+    if not news_items:
+        await message.answer("No news found.")
+        return
+
+    for item in news_items:
+        parts = []
+        if item.get('title'):
+            parts.append(item['title'])
+        text_body = item.get('summary') or item.get('body') or ''
+        if text_body:
+            parts.append(text_body[:500])
+        if item.get('url'):
+            parts.append(item['url'])
+        if parts:
+            await message.answer('\n'.join(parts))
