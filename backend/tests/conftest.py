@@ -32,9 +32,9 @@ async def db_session(engine):
     async with factory() as session:
         yield session
         await session.rollback()
-        async with engine.begin() as conn:
-            for table in reversed(Base.metadata.sorted_tables):
-                await conn.execute(table.delete())
+    async with engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            await conn.execute(table.delete())
 
 
 @pytest.fixture
