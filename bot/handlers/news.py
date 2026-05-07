@@ -16,6 +16,11 @@ async def cmd_start(message: Message):
         "Use /settings to configure topics and sources."
     )
 
+@router.message(Command("malayatokmachka"))
+async def cmd_start(message: Message):
+    await message.answer(
+        "⚡️Сегодня Малая Токмачка не взята"
+    )
 
 @router.message(Command("top"))
 async def cmd_top(message: Message):
