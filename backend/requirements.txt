@@ -44,3 +44,6 @@ pydantic[email]==2.9.2
 pydantic-settings==2.5.2
 python-dotenv==1.0.1
 pytz==2024.2
+
+# Monitoring
+prometheus-fastapi-instrumentator==7.0.0

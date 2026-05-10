@@ -76,6 +76,33 @@ services:
     depends_on:
       - backend
 
+  flower:
+    image: mher/flower
+    command: celery flower --port=5555
+    environment:
+      CELERY_BROKER_URL: ${REDIS_URL}
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - worker
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      
 volumes:
   postgres_data:
   redis_data:
