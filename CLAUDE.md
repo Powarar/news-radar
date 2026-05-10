@@ -2,7 +2,7 @@
 
 ## Project
 
-News aggregator with AI personalization. Global audience, multilingual.
+Новостной агрегатор с персонализацией через AI. Парсит Telegram-каналы и сайты, классифицирует по темам, суммаризирует, показывает пользователю то что ему интересно.
 Stack: FastAPI + PostgreSQL + Celery + Redis + React + aiogram + Docker.
 
 ## Architecture
@@ -32,15 +32,16 @@ Stack: FastAPI + PostgreSQL + Celery + Redis + React + aiogram + Docker.
 
 ## What is NOT done yet (TODO)
 
-- Route implementations (all routes have `pass` or `raise NotImplementedError`)
-- Telethon client initialization and session management
-- HuggingFace API calls in classifier.py and summarizer.py
-- Importance scoring formula in importance.py
-- React UI components and pages
-- Pydantic schemas in `backend/app/schemas/`
-- Alembic initial migration (needs to be generated after DB is up)
-- Google OAuth full flow
-- TG bot inline keyboards
+- `GET /api/v1/preferences` and `PUT /api/v1/preferences` — stubs
+- `GET /api/v1/sources`, `POST /api/v1/sources`, `PATCH /api/v1/sources/{id}/toggle`, `PATCH /api/v1/sources/{id}/blacklist` — stubs
+- `send_notifications` Celery task — stub, bot push not implemented
+- Importance scoring in `services/ai/importance.py` — returns stub value, needs real formula
+- Bot `/settings` and `/sources` handlers — stubs, inline keyboards not done
+- Frontend preferences page and sources management page — not built
+- Alembic initial migration — must be generated after first `docker compose up`
+- Healthchecks for backend and worker in docker-compose
+- Structured logging — currently basic Python logging
+- Rate limiting on auth endpoints
 
 ## Running locally
 
