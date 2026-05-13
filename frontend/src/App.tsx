@@ -6,6 +6,7 @@ import { User, NewsItem } from "./types";
 function useTelegramWebApp() {
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
+    alert(`hasTg=${!!tg} initData="${tg?.initData?.slice(0,30)}" hasToken=${!!localStorage.getItem("access_token")}`);
     if (!tg?.initData || localStorage.getItem("access_token")) return;
 
     tg.ready();
