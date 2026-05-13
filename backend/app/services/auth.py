@@ -8,10 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import (
     create_access_token,
     create_refresh_token,
-    decode_token, 
+    decode_token,
     hash_password,
     verify_password,
-    verify_telegram_hash
+    verify_telegram_hash,
+    verify_webapp_init_data,
 )
 from app.core.redis import redis
 from app.core.config import settings
@@ -74,6 +75,28 @@ class AuthService:
 
         return code
 
+    async def telegram_webapp_login(self, init_data: str) -> TokenResponse:
+        user_data = verify_webapp_init_data(init_data)
+        if not user_data:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid WebApp data")
+
+        telegram_id = str(user_data.get("id", ""))
+        if not telegram_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No user id in WebApp data")
+
+        username = user_data.get("username") or f"tg_{telegram_id}"
+
+        user = await self.repo.get_by_telegram_id(telegram_id)
+        if not user:
+            if await self.repo.get_by_username(username):
+                username = f"{username}_{telegram_id[:6]}"
+            user = await self.repo.create_telegram(username, telegram_id)
+
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
+
+        return self._make_tokens(user.id)
+
     async def telegram_login(self, data: dict) -> TokenResponse:
         if not verify_telegram_hash(data):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Telegram data")
@@ -92,6 +115,29 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
 
         return self._make_tokens(user.id)
+
+    async def telegram_magic_link(self, telegram_id: str) -> str:
+        user = await self.repo.get_by_telegram_id(telegram_id)
+
+        if not user:
+            username = f"tg_{telegram_id}"
+            if await self.repo.get_by_username(username):
+                username = f"{username}_{telegram_id[:6]}"
+            user = await self.repo.create_telegram(username, telegram_id)
+
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
+
+        tokens = self._make_tokens(user.id)
+        code = secrets.token_hex(32)
+
+        await redis.set(
+            f"oauth_code:{code}",
+            json.dumps({"access_token": tokens.access_token, "refresh_token": tokens.refresh_token}),
+            ex=settings.oauth_code_ttl,
+        )
+
+        return code
 
     async def exchange_oauth_code(self, code: str) -> TokenResponse:
         raw = await redis.get(f"oauth_code:{code}")

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -75,6 +75,15 @@ async def google_callback(
     return RedirectResponse(f"{settings.frontend_url}/oauth/callback?code={code}")
 
 
+@router.post("/telegram/webapp", response_model=TokenResponse)
+async def telegram_webapp_login(
+    request: Request,
+    service: Annotated[AuthService, Depends(get_auth_service)],
+):
+    data = await request.json()
+    return await service.telegram_webapp_login(data.get("init_data", ""))
+
+
 @router.post("/telegram", response_model=TokenResponse)
 async def telegram_login(
     request: Request,
@@ -82,6 +91,24 @@ async def telegram_login(
 ):
     data = await request.json()
     return await service.telegram_login(data)
+
+
+@router.post("/telegram/magic-link")
+async def telegram_magic_link(
+    request: Request,
+    service: Annotated[AuthService, Depends(get_auth_service)],
+):
+    bot_token = request.headers.get("X-Bot-Token", "")
+    if not settings.telegram_bot_token or bot_token != settings.telegram_bot_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bot token")
+
+    data = await request.json()
+    telegram_id = str(data.get("telegram_id", ""))
+    if not telegram_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="telegram_id required")
+
+    code = await service.telegram_magic_link(telegram_id)
+    return {"code": code}
 
 
 @router.post("/exchange", response_model=TokenResponse)

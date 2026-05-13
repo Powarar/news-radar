@@ -54,6 +54,34 @@ def decode_token(token: str) -> dict:
     return jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
 
 
+def verify_webapp_init_data(init_data: str) -> dict | None:
+    """Verify Telegram Mini App initData and return parsed user dict, or None if invalid."""
+    import json
+    from urllib.parse import parse_qsl
+
+    params = dict(parse_qsl(init_data, keep_blank_values=True))
+    received_hash = params.pop("hash", None)
+    if not received_hash:
+        return None
+
+    if time.time() - int(params.get("auth_date", 0)) > 600:
+        return None
+
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
+
+    # Mini App key derivation differs from Login Widget: HMAC-SHA256("WebAppData", bot_token)
+    secret_key = hmac.new(b"WebAppData", settings.telegram_bot_token.encode(), hashlib.sha256).digest()
+    computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(computed, received_hash):
+        return None
+
+    try:
+        return json.loads(params.get("user", "{}"))
+    except Exception:
+        return None
+
+
 def verify_telegram_hash(data: dict) -> bool:
     received_hash = data.get("hash")
     if not received_hash:

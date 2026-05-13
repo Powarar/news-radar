@@ -3,6 +3,22 @@ import { Routes, Route, useNavigate, useLocation, Link, Navigate } from "react-r
 import { api } from "./api/client";
 import { User, NewsItem } from "./types";
 
+function useTelegramWebApp() {
+  useEffect(() => {
+    const tg = (window as any).Telegram?.WebApp;
+    if (!tg?.initData || localStorage.getItem("access_token")) return;
+
+    tg.ready();
+    api.post("/v1/auth/telegram/webapp", { init_data: tg.initData })
+      .then((r: { data: { access_token: string; refresh_token: string } }) => {
+        localStorage.setItem("access_token", r.data.access_token);
+        localStorage.setItem("refresh_token", r.data.refresh_token);
+        window.location.replace("/feed");
+      })
+      .catch(() => {});
+  }, []);
+}
+
 function useUser() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -162,8 +178,17 @@ function NewsCard({
 
 const LIMIT = 20;
 
+function GuestBanner() {
+  return (
+    <div style={s.guestBanner}>
+      <span>Хотите персонализировать ленту? </span>
+      <Link to="/login" style={s.guestBannerLink}>Войдите</Link>
+    </div>
+  );
+}
+
 function FeedPage() {
-  const { user } = useUser();
+  const { user, loading: userLoading } = useUser();
   const [items, setItems] = useState<NewsItem[]>([]);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
@@ -202,6 +227,8 @@ function FeedPage() {
     <div style={s.page}>
       <NavBar />
       <main style={s.feed}>
+        {!userLoading && !user && <GuestBanner />}
+
         {items.length === 0 && !loading && (
           <div style={s.empty}>
             <p>Новостей пока нет.</p>
@@ -771,6 +798,21 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "center",
   },
 
+  guestBanner: {
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-sm)",
+    padding: "12px 16px",
+    fontSize: 14,
+    color: "var(--text-muted)",
+    textAlign: "center" as const,
+  },
+  guestBannerLink: {
+    color: "var(--accent)",
+    fontWeight: 600,
+    textDecoration: "none",
+  },
+
   center: {
     minHeight: "100dvh",
     display: "flex",
@@ -781,6 +823,7 @@ const s: Record<string, React.CSSProperties> = {
 };
 
 export default function App() {
+  useTelegramWebApp();
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/feed" replace />} />
@@ -788,6 +831,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />
+      <Route path="/tg-auth" element={<OAuthCallback />} />
     </Routes>
   );
 }
