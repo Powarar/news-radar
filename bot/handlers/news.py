@@ -2,51 +2,24 @@ import os
 
 from aiogram import Router
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
-from httpx import AsyncClient
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 
 router = Router()
 
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://backend:8000")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-
-
-async def _get_magic_link(telegram_id: str) -> str | None:
-    try:
-        async with AsyncClient() as client:
-            r = await client.post(
-                f"{BACKEND_URL}/api/v1/auth/telegram/magic-link",
-                json={"telegram_id": telegram_id},
-                headers={"X-Bot-Token": BOT_TOKEN},
-                timeout=5,
-            )
-        if r.status_code == 200:
-            return f"{FRONTEND_URL}/tg-auth?code={r.json()['code']}"
-    except Exception:
-        pass
-    return None
 
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
-    link = await _get_magic_link(str(message.from_user.id))
-
-    if link:
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="🌐 Открыть приложение", url=link)
-        ]])
-        await message.answer(
-            "Добро пожаловать в <b>News Radar</b>!\n\n"
-            "Нажми кнопку — ты автоматически войдёшь в веб-приложение.",
-            parse_mode="HTML",
-            reply_markup=keyboard,
-        )
-    else:
-        await message.answer(
-            "Добро пожаловать в News Radar!\n\n"
-            "Используй /top для топ новостей."
-        )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🌐 Открыть News Radar", web_app=WebAppInfo(url=FRONTEND_URL))
+    ]])
+    await message.answer(
+        "Добро пожаловать в <b>News Radar</b>!\n\n"
+        "Нажми кнопку — откроется приложение, войдёшь автоматически.",
+        parse_mode="HTML",
+        reply_markup=keyboard,
+    )
 
 @router.message(Command("malayatokmachka"))
 async def cmd_start(message: Message):

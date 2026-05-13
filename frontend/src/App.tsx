@@ -6,14 +6,6 @@ import { User, NewsItem } from "./types";
 function useTelegramWebApp() {
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
-    const debugInfo = {
-      hasTg: !!tg,
-      hasInitData: !!tg?.initData,
-      initDataLength: tg?.initData?.length ?? 0,
-      hasToken: !!localStorage.getItem("access_token"),
-    };
-    console.log("[TG WebApp debug]", debugInfo);
-
     if (!tg?.initData || localStorage.getItem("access_token")) return;
 
     tg.ready();
@@ -23,10 +15,7 @@ function useTelegramWebApp() {
         localStorage.setItem("refresh_token", r.data.refresh_token);
         window.location.replace("/feed");
       })
-      .catch((e: any) => {
-        console.error("[TG WebApp] auth failed:", e?.response?.status, e?.response?.data);
-        alert(`TG auth failed: ${e?.response?.status} — ${JSON.stringify(e?.response?.data)}`);
-      });
+      .catch(() => {});
   }, []);
 }
 
