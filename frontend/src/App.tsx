@@ -15,7 +15,9 @@ function useTelegramWebApp() {
         localStorage.setItem("refresh_token", r.data.refresh_token);
         window.location.replace("/feed");
       })
-      .catch(() => {});
+      .catch((e: any) => {
+        alert(`TG auth error: ${e?.response?.status} — ${JSON.stringify(e?.response?.data)}`);
+      });
   }, []);
 }
 
