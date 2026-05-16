@@ -46,6 +46,11 @@ def mock_redis():
     m.set.return_value = True
     m.setex.return_value = True
     m.delete.return_value = True
+    # Rate limiter uses async with redis.pipeline() as pipe:
+    pipe = AsyncMock()
+    pipe.execute.return_value = (0, 0, 0, 0)  # unpacked as (_, count, _, _)
+    pipe.__aenter__.return_value = pipe       # async with returns same pipe
+    m.pipeline.return_value = pipe
     return m
 
 
@@ -55,6 +60,7 @@ async def client(db_session, mock_redis, monkeypatch):
         yield db_session
 
     monkeypatch.setattr("app.core.redis.redis", mock_redis)
+    monkeypatch.setattr("app.core.rate_limit.redis", mock_redis)
     monkeypatch.setattr("app.services.auth.redis", mock_redis)
     monkeypatch.setattr("app.api.v1.deps.redis", mock_redis)
 

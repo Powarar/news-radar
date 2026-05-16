@@ -14,7 +14,8 @@
       "Bash(pip show *)",
       "Bash(pip list *)",
       "Bash(python -c \"import sys; print\\(sys.path[:3]\\)\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Skill(superpowers:systematic-debugging)"
     ]
   }
 }
