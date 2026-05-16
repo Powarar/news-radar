@@ -4,6 +4,19 @@ from fastapi import HTTPException, Request, status
 
 from app.core.redis import redis
 
+# Lua script: atomically clean old entries, count remaining, add new entry, refresh TTL.
+# KEYS[1] — sorted set key
+# ARGV[1] — window start (cutoff timestamp)
+# ARGV[2] — new entry score & member (now)
+# ARGV[3] — TTL seconds
+_SLIDING_WINDOW_SCRIPT = """
+redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[1])
+local count = redis.call('ZCARD', KEYS[1])
+redis.call('ZADD', KEYS[1], ARGV[2], ARGV[2])
+redis.call('EXPIRE', KEYS[1], ARGV[3])
+return count
+"""
+
 
 class RateLimiter:
     """Simple sliding-window rate limiter backed by Redis."""
@@ -19,12 +32,14 @@ class RateLimiter:
         now = time.time()
         window_start = now - self.window_seconds
 
-        pipe = await redis.pipeline()
-        pipe.zremrangebyscore(key, 0, window_start)
-        pipe.zcard(key)
-        pipe.zadd(key, {str(now): now})
-        pipe.expire(key, self.window_seconds + 1)
-        _, count, _, _ = await pipe.execute()
+        count = await redis.eval(
+            _SLIDING_WINDOW_SCRIPT,
+            1,
+            key,
+            window_start,
+            now,
+            self.window_seconds + 1,
+        )
 
         if count > self.max_requests:
             raise HTTPException(
