@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError
+from jwt import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +23,7 @@ async def get_current_user(
         payload = decode_token(credentials.credentials)
         if await redis.exists(f"blacklist:{credentials.credentials}"):                                                                                
             raise HTTPException(401, "Token revoked")
-    except JWTError:
+    except InvalidTokenError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     if payload.get("type") != "access":
@@ -53,7 +53,7 @@ async def get_optional_user(
             return None
         if payload.get("type") != "access":
             return None
-    except JWTError:
+    except InvalidTokenError:
         return None
     result = await db.execute(select(User).where(User.id == int(payload["sub"])))
     user = result.scalar_one_or_none()

@@ -19,7 +19,11 @@
       "Bash(python -m pytest tests/test_auth.py -v)",
       "Read(//mnt/c/Users/alexi/Documents/**)",
       "Bash(docker compose *)",
-      "PowerShell(docker compose *)"
+      "PowerShell(docker compose *)",
+      "Bash(Get-ChildItem -Path . -Name \".env*\" -Force)",
+      "Bash(Get-ChildItem -Path backend -Name \"pytest.ini\")",
+      "WebSearch",
+      "WebFetch(domain:pypi.org)"
     ]
   }
 }

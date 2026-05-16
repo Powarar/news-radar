@@ -49,6 +49,14 @@ def mock_redis():
     # Rate limiter uses pipe = await redis.pipeline()
     pipe = AsyncMock()
     pipe.execute.return_value = (0, 0, 0, 0)  # unpacked as (_, count, _, _)
+    # Pipeline methods return coroutines in redis-py but are never awaited
+    # individually — only execute() is awaited.  return_value=None stops
+    # AsyncMock from auto-generating CoroutineMock objects that trigger
+    # "coroutine was never awaited" warnings.
+    pipe.zremrangebyscore.return_value = None
+    pipe.zcard.return_value = None
+    pipe.zadd.return_value = None
+    pipe.expire.return_value = None
     m.pipeline.return_value = pipe
     return m
 
