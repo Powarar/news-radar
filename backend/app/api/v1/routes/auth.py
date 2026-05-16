@@ -11,10 +11,13 @@ from app.core.database import get_db
 from app.schemas.auth import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, OAuthCodeRequest
 from app.services.auth import AuthService
 from app.core.config import settings
+from app.core.rate_limit import RateLimiter
 from app.api.v1.deps import bearer
 
 
 router = APIRouter()
+
+auth_rate_limit = RateLimiter(max_requests=5, window_seconds=60)  # 5 req/min per IP
 
 config = Config(environ={
     "GOOGLE_CLIENT_ID": settings.google_client_id,
@@ -37,6 +40,7 @@ def get_auth_service(db: Annotated[AsyncSession, Depends(get_db)]) -> AuthServic
 async def register(
     data: RegisterRequest,
     service: Annotated[AuthService, Depends(get_auth_service)],
+    _rate_limit: Annotated[None, Depends(auth_rate_limit)],
 ):
     return await service.register(data)
 
@@ -45,6 +49,7 @@ async def register(
 async def login(
     data: LoginRequest,
     service: Annotated[AuthService, Depends(get_auth_service)],
+    _rate_limit: Annotated[None, Depends(auth_rate_limit)],
 ):
     return await service.login(data)
 

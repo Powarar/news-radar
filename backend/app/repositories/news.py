@@ -1,6 +1,7 @@
 import json
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select, type_coerce
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news import NewsItem, NewsReaction, ReactionType
@@ -12,7 +13,14 @@ class NewsRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_feed(self, limit: int, offset: int, user_id: int | None = None) -> tuple[list[dict], int]:
+    async def get_feed(
+        self,
+        limit: int,
+        offset: int,
+        user_id: int | None = None,
+        language: str | None = None,
+        preferred_topics: list[str] | None = None,
+    ) -> tuple[list[dict], int]:
         sort_by = func.coalesce(NewsItem.published_at, NewsItem.created_at)
 
         stmt = select(NewsItem, Source).join(Source, NewsItem.source_id == Source.id)
@@ -24,6 +32,13 @@ class NewsRepository:
                 .scalar_subquery()
             )
             stmt = stmt.where(NewsItem.source_id.not_in(blacklisted_sq))
+
+        if language:
+            stmt = stmt.where(NewsItem.language == language)
+
+        if preferred_topics:
+            topics_jsonb = type_coerce(NewsItem.topics, JSONB)
+            stmt = stmt.where(or_(*[topics_jsonb.has_key(t) for t in preferred_topics]))
 
         total = await self.db.scalar(select(func.count()).select_from(stmt.subquery()))
 

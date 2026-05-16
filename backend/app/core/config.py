@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     # Frontend
     frontend_url: str = "http://localhost:5173"
 
+    # CORS
+    @property
+    def cors_origins(self) -> list[str]:
+        if self.debug:
+            return [
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:3000",
+            ]
+        return ["https://news.safonovpavel.space"]
+
     # Google OAuth
     google_client_id: str = ""
     google_client_secret: str = ""

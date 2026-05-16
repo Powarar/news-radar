@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -30,11 +30,11 @@ class NewsItem(Base):
     url: Mapped[str | None] = mapped_column(String(512), unique=True)
     image_url: Mapped[str | None] = mapped_column(String(512))
 
-    language: Mapped[str] = mapped_column(String(10), default="en")
+    language: Mapped[str] = mapped_column(String(10), default="en", index=True)
     topics: Mapped[str | None] = mapped_column(Text)         # JSON: {"politics": 0.9, "tech": 0.2}
     importance_score: Mapped[float] = mapped_column(Float, default=0.0)  # 0.0 – 1.0
 
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -54,6 +54,8 @@ class NewsReaction(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+    __table_args__ = (UniqueConstraint("user_id", "news_item_id", name="uq_news_reactions_user_news"),)
 
     user: Mapped["User"] = relationship(back_populates="reactions")
     news_item: Mapped["NewsItem"] = relationship(back_populates="reactions")

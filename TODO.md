@@ -2,37 +2,37 @@
 
 ---
 
-- [ ] CORS — убрать `allow_origins=["*"]`, прописать конкретные домены
+- [x] CORS — убрать `allow_origins=["*"]`, прописать конкретные домены
 
 ---
 
 ## Шаг 2 — MVP (минимально рабочее приложение)
 
-- [ ] `GET /preferences/` — вернуть топики пользователя с весами
-- [ ] `PUT /preferences/` — обновить веса топиков
-- [ ] `GET /news/` — добавить фильтрацию по предпочтениям пользователя и языку
+- [x] `GET /preferences/` — вернуть топики пользователя с весами
+- [x] `PUT /preferences/` — обновить веса топиков
+- [x] `GET /news/` — добавить фильтрацию по предпочтениям пользователя и языку
 - [x] `classifier.py` — HTTP вызов HuggingFace Inference API (`facebook/bart-large-mnli`)
 - [x] `summarizer.py` — HTTP вызов HuggingFace Inference API (`csebuetnlp/mT5_multilingual_XLSum`)
 - [x] `importance.py` — базовая формула (`max_topic * 0.6`), полная — в Шаге 8
 - [x] `process_news_ai()` task — classifier + summarizer параллельно через gather, сохранить в `NewsItem`
-- [ ] Индексы в БД — добавить на `news_items.published_at`, `news_items.language`
-- [ ] Frontend: страница предпочтений — выбор топиков и весов (слайдеры)
-- [ ] Frontend: token refresh flow — retry с `refresh_token` при 401 вместо сразу логаута
+- [x] Индексы в БД — добавить на `news_items.published_at`, `news_items.language`
+- [x] Frontend: страница предпочтений — выбор топиков и весов (слайдеры)
+- [x] Frontend: token refresh flow — retry с `refresh_token` при 401 вместо сразу логаута
 
 ---
 
 ## Шаг 3 — Полный функционал
 
 - [x] `POST /news/{id}/react` — like / dislike / blacklist
-- [ ] Unique constraint `(user_id, news_item_id)` на `news_reactions`
-- [ ] `GET /sources/` — список источников с настройками пользователя
-- [ ] `POST /sources/` — добавить источник
-- [ ] `PATCH /sources/{id}/toggle` — включить/выключить источник для себя
-- [ ] `PATCH /sources/{id}/blacklist` — заблокировать источник
-- [ ] `send_notifications()` task — найти юзеров по топикам, отправить через бота
-- [ ] Rate limiting на `/login` и `/register`
+- [x] Unique constraint `(user_id, news_item_id)` на `news_reactions`
+- [x] `GET /sources/` — список источников с настройками пользователя
+- [x] `POST /sources/` — добавить источник
+- [x] `PATCH /sources/{id}/toggle` — включить/выключить источник для себя
+- [x] `PATCH /sources/{id}/blacklist` — заблокировать источник
+- [x] `send_notifications()` task — найти юзеров по топикам, отправить через бота
+- [x] Rate limiting на `/login` и `/register`
 - [x] Frontend: реакции на карточке новости — кнопки like / dislike / blacklist
-- [ ] Frontend: страница источников — список с переключателями
+- [x] Frontend: страница источников — список с переключателями
 
 ---
 

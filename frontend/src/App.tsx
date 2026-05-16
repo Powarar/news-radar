@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Routes, Route, useNavigate, useLocation, Link, Navigate } from "react-router-dom";
 import { api } from "./api/client";
 import { User, NewsItem } from "./types";
+import PreferencesPage from "./components/PreferencesPage";
+import SourcesPage from "./components/SourcesPage";
 
 function useTelegramWebApp() {
   useEffect(() => {
@@ -41,6 +43,8 @@ function NavBar() {
       <Link to="/feed" style={s.navLogo}>News Radar</Link>
       <div style={s.navLinks}>
         <Link to="/feed" style={s.navLink}>Лента</Link>
+        <Link to="/preferences" style={s.navLink}>Темы</Link>
+        <Link to="/sources" style={s.navLink}>Источники</Link>
         <Link to="/profile" style={s.navLink}>Профиль</Link>
       </div>
     </nav>
@@ -828,6 +832,8 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Navigate to="/feed" replace />} />
       <Route path="/feed" element={<FeedPage />} />
+      <Route path="/preferences" element={<PreferencesPage />} />
+      <Route path="/sources" element={<SourcesPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />

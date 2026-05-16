@@ -40,6 +40,14 @@ export interface TopicPreference {
   weight: number;   // 0.0 – 1.0
 }
 
+export interface PreferencesResponse {
+  preferences: TopicPreference[];
+}
+
+export interface PreferencesUpdate {
+  preferences: TopicPreference[];
+}
+
 export interface FeedFilters {
   topics?: string[];
   languages?: string[];

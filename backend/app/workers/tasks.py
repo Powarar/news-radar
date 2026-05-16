@@ -219,6 +219,9 @@ def process_news_ai(news_id: int):
         news.importance_score = score_importance(topics)
         session.commit()
 
+        # Dispatch notification to matched TG users
+        send_notifications.delay(news_id)
+
 # ─────────────────────────────────────────────────────────────
 #  update_topic_preferences — обновляет веса топиков юзера
 # ─────────────────────────────────────────────────────────────
@@ -255,5 +258,76 @@ def update_topic_preferences(user_id: int, news_id: int, reaction: str):
 @celery_app.task(name="app.workers.tasks.send_notifications")
 def send_notifications(news_item_id: int):
     """Push relevant news to matched users via TG bot."""
-    # TODO: реализуем когда сделаем бота
-    pass
+    import httpx
+
+    with SyncSessionLocal() as session:
+        news = session.scalar(select(NewsItem).where(NewsItem.id == news_item_id))
+        if not news or not news.topics:
+            return
+
+        news_topics = json.loads(news.topics)
+
+        # Find users who have telegram_id and matching topic preferences
+        users = session.execute(
+            select(User)
+            .where(User.telegram_id.isnot(None))
+        ).scalars().all()
+
+        if not users:
+            logger.info("No Telegram users found for notifications")
+            return
+
+        bot_token = settings.telegram_bot_token
+        if not bot_token:
+            logger.warning("TELEGRAM_BOT_TOKEN not set, skipping notifications")
+            return
+
+        # Build message
+        title = news.title or "Без заголовка"
+        topics_str = ", ".join(
+            f"{topic}: {score:.0%}" for topic, score in
+            sorted(news_topics.items(), key=lambda x: x[1], reverse=True)[:3]
+        )
+        summary_line = f"\n\n{news.summary}" if news.summary else ""
+        url_line = f"\n\nПодробнее: {news.url}" if news.url else ""
+
+        text = (
+            f"<b>{title}</b>\n"
+            f"Темы: {topics_str}{summary_line}{url_line}"
+        )
+
+        for user in users:
+            # Check if this user has any matching preferences
+            prefs = session.execute(
+                select(UserTopicPreference.topic)
+                .where(
+                    UserTopicPreference.user_id == user.id,
+                    UserTopicPreference.weight > 0,
+                )
+            ).scalars().all()
+
+            if not prefs:
+                continue
+
+            matching = [t for t in prefs if t in news_topics and news_topics[t] > 0.2]
+            if not matching:
+                continue
+
+            try:
+                resp = httpx.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    json={
+                        "chat_id": user.telegram_id,
+                        "text": text,
+                        "parse_mode": "HTML",
+                        "disable_web_page_preview": True,
+                    },
+                    timeout=10,
+                )
+                if resp.status_code != 200:
+                    logger.warning(
+                        "Failed to send notification to user_id=%d telegram_id=%s: %s",
+                        user.id, user.telegram_id, resp.text,
+                    )
+            except Exception:
+                logger.exception("Error sending notification to user_id=%d", user.id)

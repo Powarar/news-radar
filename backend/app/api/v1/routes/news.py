@@ -1,9 +1,11 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.models.user import UserTopicPreference
 from app.repositories.news import NewsRepository
 from app.schemas.news import NewsReactionRequest
 from app.api.v1.deps import CurrentUser, OptionalUser
@@ -24,8 +26,27 @@ async def get_feed(
     offset: int = Query(0, ge=0),
     user: OptionalUser = None,
     repo: NewsRepository = Depends(get_news_repo),
+    db: AsyncSession = Depends(get_db),
 ):
-    items, total = await repo.get_feed(limit, offset, user_id=user.id if user else None)
+    language: str | None = None
+    preferred_topics: list[str] | None = None
+
+    if user:
+        language = user.language
+        result = await db.execute(
+            select(UserTopicPreference.topic)
+            .where(UserTopicPreference.user_id == user.id, UserTopicPreference.weight > 0)
+        )
+        topics = result.scalars().all()
+        if topics:
+            preferred_topics = list(topics)
+
+    items, total = await repo.get_feed(
+        limit, offset,
+        user_id=user.id if user else None,
+        language=language,
+        preferred_topics=preferred_topics,
+    )
     return {"items": items, "offset": offset, "limit": limit, "total": total}
 
 

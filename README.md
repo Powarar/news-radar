@@ -35,7 +35,7 @@ news-radar/
 ├── backend/
 │   ├── app/
 │   │   ├── api/v1/routes/    # auth, news, sources, preferences, users
-│   │   ├── core/             # config, db, security, redis
+│   │   ├── core/             # config, db, security, redis, rate_limit
 │   │   ├── models/           # ORM models
 │   │   ├── repositories/     # DB queries
 │   │   ├── schemas/          # Pydantic schemas
@@ -45,7 +45,7 @@ news-radar/
 │   │   └── workers/          # Celery tasks + beat schedule
 ├── frontend/src/
 │   ├── api/                  # axios client with refresh token logic
-│   ├── pages/                # Feed, Login, Profile
+│   ├── components/           # FeedPage, LoginPage, ProfilePage, PreferencesPage, SourcesPage
 │   └── types/
 ├── bot/handlers/             # /start, /top, settings
 ├── nginx/nginx.conf
@@ -94,6 +94,8 @@ HUGGINGFACE_API_TOKEN=
 
 ## API
 
+Auth endpoints `/login` and `/register` are rate-limited to **5 requests/minute per IP**.
+
 | Method | Endpoint | |
 |---|---|---|
 | POST | /api/v1/auth/register | ✅ |
@@ -107,20 +109,22 @@ HUGGINGFACE_API_TOKEN=
 | POST | /api/v1/news/{id}/react | ✅ |
 | GET | /api/v1/users/me | ✅ |
 | PATCH | /api/v1/users/me | ✅ |
-| GET | /api/v1/sources | 🚧 |
-| PATCH | /api/v1/sources/{id}/toggle | 🚧 |
-| GET | /api/v1/preferences | 🚧 |
-| PUT | /api/v1/preferences | 🚧 |
+| GET | /api/v1/sources | ✅ |
+| POST | /api/v1/sources | ✅ |
+| PATCH | /api/v1/sources/{id}/toggle | ✅ |
+| PATCH | /api/v1/sources/{id}/blacklist | ✅ |
+| GET | /api/v1/preferences | ✅ |
+| PUT | /api/v1/preferences | ✅ |
 
 ## Background tasks
 
-Three Celery queues: `parsing`, `ai`, `default`.
+Three Celery queues: `parsing`, `ai`, `default`, `notifications`, `preferences`.
 
 - `fetch_sources` — runs every 15 min via beat, dispatches tasks per source
 - `fetch_telegram_channel` / `fetch_website` — fetch new items, deduplicate by URL
 - `process_news_ai` — parallel classify + summarize via asyncio.gather
 - `update_topic_preferences` — adjusts user topic weights after each reaction
-- `send_notifications` — not implemented yet
+- `send_notifications` — pushes matched news to Telegram users based on their topic preferences
 
 ## Production
 
