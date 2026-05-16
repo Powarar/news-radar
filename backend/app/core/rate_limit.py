@@ -19,12 +19,12 @@ class RateLimiter:
         now = time.time()
         window_start = now - self.window_seconds
 
-        async with redis.pipeline() as pipe:
-            pipe.zremrangebyscore(key, 0, window_start)  # remove old entries
-            pipe.zcard(key)                                # count current
-            pipe.zadd(key, {str(now): now})                # add current
-            pipe.expire(key, self.window_seconds + 1)      # set TTL
-            _, count, _, _ = await pipe.execute()
+        pipe = await redis.pipeline()
+        pipe.zremrangebyscore(key, 0, window_start)
+        pipe.zcard(key)
+        pipe.zadd(key, {str(now): now})
+        pipe.expire(key, self.window_seconds + 1)
+        _, count, _, _ = await pipe.execute()
 
         if count > self.max_requests:
             raise HTTPException(
