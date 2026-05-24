@@ -283,7 +283,7 @@ def send_notifications(news_item_id: int):
             ))
             .where(
                 User.telegram_id.isnot(None),
-                User.notifications_enabled == True,
+                User.notifications_enabled,
             )
         ).all()
 

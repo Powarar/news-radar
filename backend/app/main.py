@@ -1,16 +1,17 @@
 import logging
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
+
+from app.api.v1.routes import auth, bot, news, preferences, sources, users
+from app.core.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
-from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.sessions import SessionMiddleware
-from app.api.v1.routes import auth, bot, news, preferences, sources, users
-from app.core.config import settings
-from prometheus_fastapi_instrumentator import Instrumentator
 
 app = FastAPI(
     title="News Radar API",
