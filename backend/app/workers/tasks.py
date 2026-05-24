@@ -2,7 +2,9 @@ import asyncio
 import json
 import logging
 
-from sqlalchemy import create_engine, select
+from collections import defaultdict
+
+from sqlalchemy import and_, create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
@@ -267,20 +269,33 @@ def send_notifications(news_item_id: int):
 
         news_topics = json.loads(news.topics)
 
-        # Find users who have telegram_id and matching topic preferences
-        users = session.execute(
-            select(User)
-            .where(User.telegram_id.isnot(None))
-        ).scalars().all()
-
-        if not users:
-            logger.info("No Telegram users found for notifications")
-            return
-
         bot_token = settings.telegram_bot_token
         if not bot_token:
             logger.warning("TELEGRAM_BOT_TOKEN not set, skipping notifications")
             return
+
+        # One query: all telegram users joined with their topic preferences
+        rows = session.execute(
+            select(User.id, User.telegram_id, UserTopicPreference.topic)
+            .join(UserTopicPreference, and_(
+                UserTopicPreference.user_id == User.id,
+                UserTopicPreference.weight > 0,
+            ))
+            .where(
+                User.telegram_id.isnot(None),
+                User.notifications_enabled == True,
+            )
+        ).all()
+
+        if not rows:
+            logger.info("No Telegram users with preferences found")
+            return
+
+        # Group topics by user
+        user_prefs: dict[int, tuple[str, list[str]]] = defaultdict(lambda: ("", []))
+        for user_id, telegram_id, topic in rows:
+            _, topics = user_prefs[user_id]
+            user_prefs[user_id] = (telegram_id, topics + [topic])
 
         # Build message
         title = news.title or "Без заголовка"
@@ -296,19 +311,15 @@ def send_notifications(news_item_id: int):
             f"Темы: {topics_str}{summary_line}{url_line}"
         )
 
-        for user in users:
-            # Check if this user has any matching preferences
-            prefs = session.execute(
-                select(UserTopicPreference.topic)
-                .where(
-                    UserTopicPreference.user_id == user.id,
-                    UserTopicPreference.weight > 0,
-                )
-            ).scalars().all()
+        keyboard = {
+            "inline_keyboard": [[
+                {"text": "↑ 0", "callback_data": f"like:{news_item_id}"},
+                {"text": "↓ 0", "callback_data": f"dislike:{news_item_id}"},
+                {"text": "✖", "callback_data": f"blacklist:{news_item_id}"},
+            ]]
+        }
 
-            if not prefs:
-                continue
-
+        for user_id, (telegram_id, prefs) in user_prefs.items():
             matching = [t for t in prefs if t in news_topics and news_topics[t] > 0.2]
             if not matching:
                 continue
@@ -317,17 +328,18 @@ def send_notifications(news_item_id: int):
                 resp = httpx.post(
                     f"https://api.telegram.org/bot{bot_token}/sendMessage",
                     json={
-                        "chat_id": user.telegram_id,
+                        "chat_id": telegram_id,
                         "text": text,
                         "parse_mode": "HTML",
                         "disable_web_page_preview": True,
+                        "reply_markup": keyboard,
                     },
                     timeout=10,
                 )
                 if resp.status_code != 200:
                     logger.warning(
                         "Failed to send notification to user_id=%d telegram_id=%s: %s",
-                        user.id, user.telegram_id, resp.text,
+                        user_id, telegram_id, resp.text,
                     )
             except Exception:
-                logger.exception("Error sending notification to user_id=%d", user.id)
+                logger.exception("Error sending notification to user_id=%d", user_id)

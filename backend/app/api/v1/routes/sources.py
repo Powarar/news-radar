@@ -33,6 +33,7 @@ async def list_sources(
 async def add_source(
     data: SourceCreateRequest,
     repo: Annotated[SourcesRepository, Depends(get_sources_repo)],
+    user: CurrentUser,
 ):
     """Добавить новый источник (TG канал или сайт)."""
     try:
@@ -72,7 +73,7 @@ async def blacklist_source(
     repo: Annotated[SourcesRepository, Depends(get_sources_repo)],
 ):
     """Заблокировать источник (скрыть из ленты)."""
-    result = await repo.set_blacklist(user.id, source_id, True)
+    result = await repo.toggle_blacklist(user.id, source_id)
     if not result:
         raise HTTPException(404, "Source not found")
     return result

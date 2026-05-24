@@ -78,17 +78,6 @@ export default function PreferencesPage() {
     setPrefs((prev) => ({ ...prev, [topic]: value }));
   }
 
-  if (loading) {
-    return (
-      <div style={s.page}>
-        <nav style={s.nav}>
-          <Link to="/feed" style={s.navLogo}>News Radar</Link>
-        </nav>
-        <div style={s.center}>Загрузка...</div>
-      </div>
-    );
-  }
-
   return (
     <div style={s.page}>
       <nav style={s.nav}>
@@ -100,7 +89,7 @@ export default function PreferencesPage() {
           <Link to="/profile" style={s.navLink}>Профиль</Link>
         </div>
       </nav>
-      <div style={s.wrap}>
+      <div style={{ ...s.wrap, opacity: loading ? 0 : 1, transition: "opacity 0.2s" }}>
         <h1 style={s.heading}>Предпочтения</h1>
       <p style={s.subtitle}>
         Настройте вес каждой темы — новости с более высоким весом будут чаще попадать в вашу ленту.

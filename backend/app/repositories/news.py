@@ -1,6 +1,6 @@
 import json
 
-from sqlalchemy import desc, func, or_, select, type_coerce
+from sqlalchemy import cast, desc, func, or_, select, case
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,8 +37,13 @@ class NewsRepository:
             stmt = stmt.where(NewsItem.language == language)
 
         if preferred_topics:
-            topics_jsonb = type_coerce(NewsItem.topics, JSONB)
-            stmt = stmt.where(or_(*[topics_jsonb.has_key(t) for t in preferred_topics]))
+            topics_jsonb = cast(NewsItem.topics, JSONB)
+            stmt = stmt.where(
+                or_(
+                    NewsItem.topics.is_(None),
+                    *[topics_jsonb.has_key(t) for t in preferred_topics],
+                )
+            )
 
         total = await self.db.scalar(select(func.count()).select_from(stmt.subquery()))
 
@@ -80,30 +85,44 @@ class NewsRepository:
         else:
             self.db.add(UserSourceSetting(user_id=user_id, source_id=source_id, blacklisted=True))
 
+    async def get_reaction_counts(self, news_id: int) -> dict:
+        result = await self.db.execute(
+            select(
+                func.sum(case((NewsReaction.reaction == ReactionType.like, 1), else_=0)).label("likes"),
+                func.sum(case((NewsReaction.reaction == ReactionType.dislike, 1), else_=0)).label("dislikes"),
+            ).where(NewsReaction.news_item_id == news_id)
+        )
+        row = result.one()
+        return {"likes": row.likes or 0, "dislikes": row.dislikes or 0}
+
     async def add_reaction(self, user_id: int, news_id: int, reaction: ReactionType) -> NewsReaction | None:
         news = await self.db.scalar(select(NewsItem).where(NewsItem.id == news_id))
         if not news:
             return None
 
         if reaction == ReactionType.blacklist:
-            await self.set_source_blacklisted(user_id, news.source_id)                                                                                                                                                 
-                                                                                                                                                                        
+            await self.set_source_blacklisted(user_id, news.source_id)
+
         existing = await self.db.scalar(
             select(NewsReaction).where(
-                NewsReaction.user_id == user_id,                                                                                                                        
+                NewsReaction.user_id == user_id,
                 NewsReaction.news_item_id == news_id,
-            )                                                                                                                                                           
-        )           
+            )
+        )
 
         if existing:
+            if existing.reaction == reaction:
+                await self.db.delete(existing)
+                await self.db.commit()
+                return None
             existing.reaction = reaction
         else:
-            existing = NewsReaction(user_id=user_id, news_item_id=news_id, reaction=reaction)                                                                           
+            existing = NewsReaction(user_id=user_id, news_item_id=news_id, reaction=reaction)
             self.db.add(existing)
-                                                                                                                                                                        
+
         await self.db.commit()
         await self.db.refresh(existing)
-        return existing    
+        return existing
 
     def _serialize(self, news: NewsItem, source: Source, reaction: str | None = None) -> dict:
         return {

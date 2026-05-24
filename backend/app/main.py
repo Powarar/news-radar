@@ -1,7 +1,14 @@
+import logging
+
 from fastapi import FastAPI
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from app.api.v1.routes import auth, news, preferences, sources, users
+from app.api.v1.routes import auth, bot, news, preferences, sources, users
 from app.core.config import settings
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -33,6 +40,7 @@ app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(news.router, prefix="/api/v1/news", tags=["news"])
 app.include_router(sources.router, prefix="/api/v1/sources", tags=["sources"])
 app.include_router(preferences.router, prefix="/api/v1/preferences", tags=["preferences"])
+app.include_router(bot.router, prefix="/api/bot", tags=["bot"])
 
 
 @app.get("/api/health")

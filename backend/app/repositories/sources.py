@@ -69,12 +69,12 @@ class SourcesRepository:
         await self.db.commit()
         return self._serialize(source, setting)
 
-    async def set_blacklist(self, user_id: int, source_id: int, blacklisted: bool) -> dict | None:
+    async def toggle_blacklist(self, user_id: int, source_id: int) -> dict | None:
         source = await self.get_by_id(source_id)
         if not source:
             return None
         setting = await self._get_or_create_setting(user_id, source_id)
-        setting.blacklisted = blacklisted
+        setting.blacklisted = not setting.blacklisted
         await self.db.commit()
         return self._serialize(source, setting)
 

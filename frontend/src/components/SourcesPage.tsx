@@ -85,17 +85,6 @@ export default function SourcesPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div style={s.page}>
-        <nav style={s.nav}>
-          <Link to="/feed" style={s.navLogo}>News Radar</Link>
-        </nav>
-        <div style={s.center}>Загрузка...</div>
-      </div>
-    );
-  }
-
   return (
     <div style={s.page}>
       <nav style={s.nav}>
@@ -108,7 +97,7 @@ export default function SourcesPage() {
         </div>
       </nav>
 
-      <div style={s.wrap}>
+      <div style={{ ...s.wrap, opacity: loading ? 0 : 1, transition: "opacity 0.2s" }}>
         <div style={s.headerRow}>
           <h1 style={s.heading}>Источники</h1>
           <button onClick={() => setShowAdd(!showAdd)} style={s.addBtn}>

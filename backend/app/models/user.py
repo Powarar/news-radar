@@ -28,6 +28,7 @@ class User(Base):
     telegram_id: Mapped[str | None] = mapped_column(String(64), unique=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     plan: Mapped[UserPlan] = mapped_column(String(20), default=UserPlan.free)
     subscription_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
