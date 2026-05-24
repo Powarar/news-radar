@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-Рассылка сообщения всем подписанным пользователям.
+Рассылка сообщения пользователям.
 
-Запуск:
-    docker compose exec backend python /app/scripts/broadcast.py "Текст сообщения"
+Запуск (всем у кого есть telegram_id):
+    docker compose exec backend python /app/scripts/broadcast.py "Текст"
+
+Запуск только подписанным:
+    docker compose exec backend python /app/scripts/broadcast.py "Текст" --subscribed
 """
 import sys
 import httpx
@@ -22,20 +25,19 @@ def main():
         sys.exit(1)
 
     text = sys.argv[1]
+    only_subscribed = "--subscribed" in sys.argv
 
     engine = create_engine(settings.database_url_sync)
     Session = sessionmaker(engine)
 
     with Session() as session:
-        users = session.execute(
-            select(User.telegram_id).where(
-                User.telegram_id.isnot(None),
-                User.notifications_enabled == True,
-            )
-        ).scalars().all()
+        query = select(User.telegram_id).where(User.telegram_id.isnot(None))
+        if only_subscribed:
+            query = query.where(User.notifications_enabled)
+        users = session.execute(query).scalars().all()
 
     if not users:
-        print("Нет подписанных пользователей.")
+        print("Нет пользователей для рассылки.")
         return
 
     print(f"Отправляю {len(users)} пользователям...")
