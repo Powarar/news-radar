@@ -51,15 +51,33 @@ class NewsRepository:
         rows = result.all()
 
         user_reactions: dict[int, str] = {}
-        if user_id and rows:
-            news_ids = [row[0].id for row in rows]
-            r = await self.db.execute(
-                select(NewsReaction.news_item_id, NewsReaction.reaction)
-                .where(NewsReaction.user_id == user_id, NewsReaction.news_item_id.in_(news_ids))
-            )
-            user_reactions = {row.news_item_id: row.reaction for row in r}
+        counts_map: dict[int, tuple[int, int]] = {}
 
-        items = [self._serialize(news, source, user_reactions.get(news.id)) for news, source in rows]
+        if rows:
+            news_ids = [row[0].id for row in rows]
+
+            if user_id:
+                r = await self.db.execute(
+                    select(NewsReaction.news_item_id, NewsReaction.reaction)
+                    .where(NewsReaction.user_id == user_id, NewsReaction.news_item_id.in_(news_ids))
+                )
+                user_reactions = {row.news_item_id: row.reaction for row in r}
+
+            counts_result = await self.db.execute(
+                select(
+                    NewsReaction.news_item_id,
+                    func.sum(case((NewsReaction.reaction == ReactionType.like, 1), else_=0)).label("likes"),
+                    func.sum(case((NewsReaction.reaction == ReactionType.dislike, 1), else_=0)).label("dislikes"),
+                )
+                .where(NewsReaction.news_item_id.in_(news_ids))
+                .group_by(NewsReaction.news_item_id)
+            )
+            counts_map = {row.news_item_id: (row.likes or 0, row.dislikes or 0) for row in counts_result}
+
+        items = [
+            self._serialize(news, source, user_reactions.get(news.id), *counts_map.get(news.id, (0, 0)))
+            for news, source in rows
+        ]
         return items, total or 0
 
     async def get_by_id(self, news_id: int) -> dict | None:
@@ -124,7 +142,7 @@ class NewsRepository:
         await self.db.refresh(existing)
         return existing
 
-    def _serialize(self, news: NewsItem, source: Source, reaction: str | None = None) -> dict:
+    def _serialize(self, news: NewsItem, source: Source, reaction: str | None = None, likes_count: int = 0, dislikes_count: int = 0) -> dict:
         return {
             "id": news.id,
             "title": news.title,
@@ -138,6 +156,8 @@ class NewsRepository:
             "published_at": news.published_at.isoformat() if news.published_at else None,
             "created_at": news.created_at.isoformat(),
             "reaction": reaction,
+            "likes_count": likes_count,
+            "dislikes_count": dislikes_count,
             "source": {
                 "id": source.id,
                 "name": source.name,

@@ -32,7 +32,9 @@ export interface NewsItem {
   importance_score: number;
   published_at: string | null;
   created_at: string;
-  reaction: "like" | "dislike" | "blacklist" | null;  // current user
+  reaction: "like" | "dislike" | "blacklist" | null;
+  likes_count: number;
+  dislikes_count: number;
 }
 
 export interface TopicPreference {

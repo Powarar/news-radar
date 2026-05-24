@@ -67,6 +67,8 @@ function NewsCard({
   onReact: (newsId: number, reaction: string) => Promise<void>;
 }) {
   const [localReaction, setLocalReaction] = useState<string | null>(item.reaction ?? null);
+  const [localLikes, setLocalLikes] = useState(item.likes_count);
+  const [localDislikes, setLocalDislikes] = useState(item.dislikes_count);
   const [loading, setLoading] = useState(false);
 
   function timeAgo(iso: string) {
@@ -82,9 +84,24 @@ function NewsCard({
   async function handleReact(reaction: string) {
     if (!user || loading) return;
     setLoading(true);
+    const prev = localReaction;
+    const isToggleOff = prev === reaction;
+
+    if (reaction === "like") {
+      setLocalLikes(n => isToggleOff ? n - 1 : prev === "dislike" ? n + 1 : n + 1);
+      setLocalDislikes(n => prev === "dislike" && !isToggleOff ? n - 1 : n);
+    } else if (reaction === "dislike") {
+      setLocalDislikes(n => isToggleOff ? n - 1 : prev === "like" ? n + 1 : n + 1);
+      setLocalLikes(n => prev === "like" && !isToggleOff ? n - 1 : n);
+    }
+    if (reaction !== "blacklist") setLocalReaction(isToggleOff ? null : reaction);
+
     try {
       await onReact(item.id, reaction);
-      if (reaction !== "blacklist") setLocalReaction(reaction);
+    } catch {
+      setLocalReaction(prev);
+      setLocalLikes(item.likes_count);
+      setLocalDislikes(item.dislikes_count);
     } finally {
       setLoading(false);
     }
@@ -140,38 +157,23 @@ function NewsCard({
               style={{ ...s.reactionBtn, ...(localReaction === "like" ? s.reactionLike : {}) }}
               onClick={() => handleReact("like")}
               disabled={loading}
-              title="Нравится"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M8 13s1.5 2 4 2 4-2 4-2"/>
-                <line x1="9" y1="9" x2="9.01" y2="9"/>
-                <line x1="15" y1="9" x2="15.01" y2="9"/>
-              </svg>
+              ↑ {localLikes}
             </button>
             <button
               style={{ ...s.reactionBtn, ...(localReaction === "dislike" ? s.reactionDislike : {}) }}
               onClick={() => handleReact("dislike")}
               disabled={loading}
-              title="Не нравится"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M16 16s-1.5-2-4-2-4 2-4 2"/>
-                <line x1="9" y1="9" x2="9.01" y2="9"/>
-                <line x1="15" y1="9" x2="15.01" y2="9"/>
-              </svg>
+              ↓ {localDislikes}
             </button>
             <button
               style={s.reactionBtn}
               onClick={() => handleReact("blacklist")}
               disabled={loading}
-              title="Скрыть канал"
+              title="Скрыть источник"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-              </svg>
+              ✖
             </button>
           </div>
         )}

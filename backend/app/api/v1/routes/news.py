@@ -62,9 +62,12 @@ async def post_reaction(
     news_id: int,
     body: NewsReactionRequest,
     user: CurrentUser,
-    service: NewsService = Depends(get_news_service)
-    ):
-    result = await service.react(user.id, news_id, body.reaction)                                                                                                   
-    if not result:                                                                                                                                                  
+    service: NewsService = Depends(get_news_service),
+    repo: NewsRepository = Depends(get_news_repo),
+):
+    exists = await repo.get_by_id(news_id)
+    if not exists:
         raise HTTPException(404, "News not found")
-    return result 
+    await service.react(user.id, news_id, body.reaction)
+    counts = await repo.get_reaction_counts(news_id)
+    return counts 
