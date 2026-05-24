@@ -193,14 +193,12 @@ export default function SourcesPage() {
                   <span style={s.toggleTrack} />
                   <span style={s.toggleText}>{src.enabled ? "Вкл" : "Выкл"}</span>
                 </label>
-                {!src.blacklisted && (
-                  <button onClick={() => blacklist(src.id)} style={s.blacklistBtn}>
-                    Скрыть
-                  </button>
-                )}
-                {src.blacklisted && (
-                  <span style={s.blacklistedBadge}>Скрыт</span>
-                )}
+                <button
+                  onClick={() => blacklist(src.id)}
+                  style={src.blacklisted ? s.blacklistedBtn : s.blacklistBtn}
+                >
+                  {src.blacklisted ? "Показать" : "Скрыть"}
+                </button>
               </div>
             </div>
           ))}
@@ -408,10 +406,14 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     cursor: "pointer",
   },
-  blacklistedBadge: {
-    fontSize: 12,
+  blacklistedBtn: {
+    background: "transparent",
+    border: "1px solid var(--danger)",
+    borderRadius: "var(--radius-sm)",
+    padding: "4px 12px",
     color: "var(--danger)",
-    fontWeight: 500,
+    fontSize: 13,
+    cursor: "pointer",
   },
   empty: {
     textAlign: "center",

@@ -28,11 +28,9 @@ async def get_feed(
     repo: NewsRepository = Depends(get_news_repo),
     db: AsyncSession = Depends(get_db),
 ):
-    language: str | None = None
     preferred_topics: list[str] | None = None
 
     if user:
-        language = user.language
         result = await db.execute(
             select(UserTopicPreference.topic)
             .where(UserTopicPreference.user_id == user.id, UserTopicPreference.weight > 0)
@@ -44,7 +42,6 @@ async def get_feed(
     items, total = await repo.get_feed(
         limit, offset,
         user_id=user.id if user else None,
-        language=language,
         preferred_topics=preferred_topics,
     )
     return {"items": items, "offset": offset, "limit": limit, "total": total}
