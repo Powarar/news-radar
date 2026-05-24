@@ -1,5 +1,12 @@
 # TODO — News Radar
 
+## AI / Контент
+
+- [ ] Найти модель суммаризации которая не обрывает текст на полуслове (текущая `mT5_multilingual_XLSum` обрезает) — смотреть в сторону `facebook/bart-large-cnn` или `google/pegasus-xsum`
+- [ ] Генерация заголовка если у новости нет title — отдельная HF-модель или prompt к суммаризатору
+- [ ] Добавить больше источников — RSS и Telegram каналы на ru/en
+
+
 ## DevOps и деплой
 
 - [ ] GitHub Actions — build + push Docker образов, SSH деплой на сервер при пуше в `main`
