@@ -1,12 +1,14 @@
+#!/usr/bin/env python3
 """
-Скрипт для добавления тестовых источников (Telegram-каналов) в БД.
+Скрипт для добавления источников (Telegram-каналов и RSS) в БД.
 
 Запуск:
-  docker compose exec backend python seed_sources.py
+  docker compose exec backend python /app/scripts/seed_sources.py
 
-Это нужно сделать один раз. После этого Celery будет
-автоматически парсить эти каналы каждые 15 минут.
+Idempotent — повторный запуск не создаёт дубликатов.
 """
+import sys
+sys.path.insert(0, "/app")
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
