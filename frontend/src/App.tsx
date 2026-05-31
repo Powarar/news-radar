@@ -1,15 +1,51 @@
 import { useEffect, useState } from "react";
-import { Routes, Route, useNavigate, useLocation, Link, Navigate } from "react-router-dom";
+import { Routes, Route, useNavigate, Link, Navigate, useLocation } from "react-router-dom";
 import { api } from "./api/client";
 import { User, NewsItem } from "./types";
+import NavBar from "./components/NavBar";
 import PreferencesPage from "./components/PreferencesPage";
 import SourcesPage from "./components/SourcesPage";
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+
+function IconThumbUp({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 10v12" /><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+    </svg>
+  );
+}
+
+function IconThumbDown({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 14V2" /><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
+    </svg>
+  );
+}
+
+function IconBan({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" /><path d="m4.9 4.9 14.2 14.2" />
+    </svg>
+  );
+}
+
+function IconExternalLink({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  );
+}
+
+// ─── Hooks ────────────────────────────────────────────────────────────────────
 
 function useTelegramWebApp() {
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     if (!tg?.initData || localStorage.getItem("access_token")) return;
-
     tg.ready();
     api.post("/v1/auth/telegram/webapp", { init_data: tg.initData })
       .then((r: { data: { access_token: string; refresh_token: string } }) => {
@@ -24,7 +60,6 @@ function useTelegramWebApp() {
 function useUser() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     if (!token) { setLoading(false); return; }
@@ -33,23 +68,10 @@ function useUser() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
-
   return { user, loading };
 }
 
-function NavBar() {
-  return (
-    <nav style={s.nav}>
-      <Link to="/feed" style={s.navLogo}>News Radar</Link>
-      <div style={s.navLinks}>
-        <Link to="/feed" style={s.navLink}>Лента</Link>
-        <Link to="/preferences" style={s.navLink}>Темы</Link>
-        <Link to="/sources" style={s.navLink}>Источники</Link>
-        <Link to="/profile" style={s.navLink}>Профиль</Link>
-      </div>
-    </nav>
-  );
-}
+// ─── Topic labels ─────────────────────────────────────────────────────────────
 
 const TOPIC_LABELS: Record<string, string> = {
   politics: "политика", military: "военное", technology: "технологии",
@@ -57,11 +79,15 @@ const TOPIC_LABELS: Record<string, string> = {
   sports: "спорт", culture: "культура", environment: "экология",
 };
 
-function NewsCard({
-  item,
-  user,
-  onReact,
-}: {
+const TOPIC_COLORS: Record<string, string> = {
+  politics: "#e05252", military: "#c0392b", technology: "#5b8dee",
+  health: "#4caf7d", science: "#9b59b6", business: "#e79b47",
+  sports: "#1abc9c", culture: "#f39c12", environment: "#27ae60",
+};
+
+// ─── NewsCard ─────────────────────────────────────────────────────────────────
+
+function NewsCard({ item, user, onReact }: {
   item: NewsItem;
   user: User | null;
   onReact: (newsId: number, reaction: string) => Promise<void>;
@@ -70,15 +96,16 @@ function NewsCard({
   const [localLikes, setLocalLikes] = useState(item.likes_count);
   const [localDislikes, setLocalDislikes] = useState(item.dislikes_count);
   const [loading, setLoading] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   function timeAgo(iso: string) {
     const diff = Date.now() - new Date(iso).getTime();
     const min = Math.floor(diff / 60_000);
     if (min < 1) return "только что";
-    if (min < 60) return `${min} мин назад`;
+    if (min < 60) return `${min} мин`;
     const h = Math.floor(min / 60);
-    if (h < 24) return `${h} ч назад`;
-    return `${Math.floor(h / 24)} д назад`;
+    if (h < 24) return `${h} ч`;
+    return `${Math.floor(h / 24)} д`;
   }
 
   async function handleReact(reaction: string) {
@@ -86,16 +113,14 @@ function NewsCard({
     setLoading(true);
     const prev = localReaction;
     const isToggleOff = prev === reaction;
-
     if (reaction === "like") {
-      setLocalLikes(n => isToggleOff ? n - 1 : prev === "dislike" ? n + 1 : n + 1);
+      setLocalLikes(n => isToggleOff ? n - 1 : n + 1);
       setLocalDislikes(n => prev === "dislike" && !isToggleOff ? n - 1 : n);
     } else if (reaction === "dislike") {
-      setLocalDislikes(n => isToggleOff ? n - 1 : prev === "like" ? n + 1 : n + 1);
+      setLocalDislikes(n => isToggleOff ? n - 1 : n + 1);
       setLocalLikes(n => prev === "like" && !isToggleOff ? n - 1 : n);
     }
     if (reaction !== "blacklist") setLocalReaction(isToggleOff ? null : reaction);
-
     try {
       await onReact(item.id, reaction);
     } catch {
@@ -107,15 +132,18 @@ function NewsCard({
     }
   }
 
-  const text = item.summary ?? (item.body.length > 280 ? item.body.slice(0, 280) + "…" : item.body);
-
+  const text = item.summary ?? (item.body.length > 240 ? item.body.slice(0, 240) + "…" : item.body);
   const topTopics = Object.entries(item.topics)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 3)
     .filter(([, score]) => score > 0.15);
 
   return (
-    <article style={s.card}>
+    <article
+      style={{ ...s.card, ...(hovered ? s.cardHovered : {}) }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       {item.image_url && (
         <img
           src={item.image_url}
@@ -131,13 +159,13 @@ function NewsCard({
       </div>
 
       {item.title && <h2 style={s.cardTitle}>{item.title}</h2>}
-
       <p style={s.cardBody}>{text}</p>
 
       {topTopics.length > 0 && (
         <div style={s.topicsRow}>
           {topTopics.map(([topic]) => (
-            <span key={topic} style={s.topicChip}>
+            <span key={topic} style={{ ...s.topicChip, borderColor: TOPIC_COLORS[topic] ?? "var(--border)" }}>
+              <span style={{ ...s.topicDot, background: TOPIC_COLORS[topic] ?? "var(--text-muted)" }} />
               {TOPIC_LABELS[topic] ?? topic}
             </span>
           ))}
@@ -145,11 +173,11 @@ function NewsCard({
       )}
 
       <div style={s.cardFooter}>
-        {item.url && (
+        {item.url ? (
           <a href={item.url} target="_blank" rel="noreferrer" style={s.readMore}>
-            Читать оригинал →
+            Читать <IconExternalLink />
           </a>
-        )}
+        ) : <span />}
 
         {user && (
           <div style={s.reactionRow}>
@@ -157,23 +185,28 @@ function NewsCard({
               style={{ ...s.reactionBtn, ...(localReaction === "like" ? s.reactionLike : {}) }}
               onClick={() => handleReact("like")}
               disabled={loading}
+              aria-label="Нравится"
+              title="Нравится"
             >
-              ↑ {localLikes}
+              <IconThumbUp /> {localLikes > 0 && <span>{localLikes}</span>}
             </button>
             <button
               style={{ ...s.reactionBtn, ...(localReaction === "dislike" ? s.reactionDislike : {}) }}
               onClick={() => handleReact("dislike")}
               disabled={loading}
+              aria-label="Не нравится"
+              title="Не нравится"
             >
-              ↓ {localDislikes}
+              <IconThumbDown /> {localDislikes > 0 && <span>{localDislikes}</span>}
             </button>
             <button
               style={s.reactionBtn}
               onClick={() => handleReact("blacklist")}
               disabled={loading}
+              aria-label="Скрыть источник"
               title="Скрыть источник"
             >
-              ✖
+              <IconBan />
             </button>
           </div>
         )}
@@ -182,16 +215,40 @@ function NewsCard({
   );
 }
 
-const LIMIT = 20;
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function CardSkeleton() {
+  return (
+    <div style={s.card}>
+      <div style={s.cardMeta}>
+        <div className="skeleton" style={{ width: 80, height: 10 }} />
+        <div className="skeleton" style={{ width: 32, height: 10 }} />
+      </div>
+      <div className="skeleton" style={{ width: "75%", height: 18, marginTop: 4 }} />
+      <div className="skeleton" style={{ width: "100%", height: 14, marginTop: 8 }} />
+      <div className="skeleton" style={{ width: "90%", height: 14, marginTop: 6 }} />
+      <div className="skeleton" style={{ width: "60%", height: 14, marginTop: 6 }} />
+      <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
+        <div className="skeleton" style={{ width: 56, height: 20, borderRadius: 20 }} />
+        <div className="skeleton" style={{ width: 64, height: 20, borderRadius: 20 }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── FeedPage ─────────────────────────────────────────────────────────────────
 
 function GuestBanner() {
   return (
     <div style={s.guestBanner}>
       <span>Хотите персонализировать ленту? </span>
-      <Link to="/login" style={s.guestBannerLink}>Войдите</Link>
+      <Link to="/login" style={{ color: "var(--accent)", fontWeight: 600 }}>Войдите</Link>
+      <span> — AI подберёт новости под ваши интересы.</span>
     </div>
   );
 }
+
+const LIMIT = 20;
 
 function FeedPage() {
   const { user, loading: userLoading } = useUser();
@@ -223,7 +280,9 @@ function FeedPage() {
       const sourceId = items.find(x => x.id === newsId)?.source.id;
       setItems(prev => prev.filter(i => i.source.id !== sourceId));
     } else {
-      setItems(prev => prev.map(i => i.id === newsId ? { ...i, reaction: reaction as NewsItem["reaction"] } : i));
+      setItems(prev => prev.map(i =>
+        i.id === newsId ? { ...i, reaction: reaction as NewsItem["reaction"] } : i
+      ));
     }
   }
 
@@ -235,40 +294,29 @@ function FeedPage() {
       <main style={s.feed}>
         {!userLoading && !user && <GuestBanner />}
 
-        {items.length === 0 && !loading && (
+        {loading ? (
+          Array.from({ length: 5 }).map((_, i) => <CardSkeleton key={i} />)
+        ) : items.length === 0 ? (
           <div style={s.empty}>
-            <p>Новостей пока нет.</p>
-            <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 8 }}>
-              Запустите парсинг через Celery worker.
+            <div style={s.emptyIcon}>📡</div>
+            <p style={{ fontWeight: 600, marginBottom: 6 }}>Новостей пока нет</p>
+            <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
+              Запустите парсинг через Celery worker
             </p>
           </div>
+        ) : (
+          items.map(item => (
+            <NewsCard key={item.id} item={item} user={user} onReact={handleReact} />
+          ))
         )}
 
-        {loading && <div style={s.endMsg}>Загрузка…</div>}
-
-        {!loading && items.map(item => (
-          <NewsCard key={item.id} item={item} user={user} onReact={handleReact} />
-        ))}
-
-        {totalPages > 1 && (
+        {totalPages > 1 && !loading && (
           <div style={s.pagination}>
-            <button
-              style={s.pageBtn}
-              onClick={() => loadPage(page - 1)}
-              disabled={page === 0}
-            >
+            <button style={s.pageBtn} onClick={() => loadPage(page - 1)} disabled={page === 0}>
               ← Назад
             </button>
-
-            <span style={s.pageInfo}>
-              {page + 1} / {totalPages}
-            </span>
-
-            <button
-              style={s.pageBtn}
-              onClick={() => loadPage(page + 1)}
-              disabled={page >= totalPages - 1}
-            >
+            <span style={s.pageInfo}>{page + 1} / {totalPages}</span>
+            <button style={s.pageBtn} onClick={() => loadPage(page + 1)} disabled={page >= totalPages - 1}>
               Вперёд →
             </button>
           </div>
@@ -277,6 +325,8 @@ function FeedPage() {
     </div>
   );
 }
+
+// ─── ProfilePage ──────────────────────────────────────────────────────────────
 
 function ProfilePage() {
   const { user, loading } = useUser();
@@ -288,30 +338,40 @@ function ProfilePage() {
     navigate("/login");
   }
 
-  if (loading) return <div style={s.center}>Загрузка...</div>;
+  if (loading) return (
+    <div style={s.page}>
+      <NavBar />
+      <div style={s.centerFull}><div className="skeleton" style={{ width: 240, height: 240, borderRadius: "var(--radius)" }} /></div>
+    </div>
+  );
   if (!user) { navigate("/login"); return null; }
 
   const hour = new Date().getHours();
-  const greeting =
-    hour < 6 ? "Доброй ночи" :
-    hour < 12 ? "Доброе утро" :
-    hour < 18 ? "Добрый день" : "Добрый вечер";
+  const greeting = hour < 6 ? "Доброй ночи" : hour < 12 ? "Доброе утро" : hour < 18 ? "Добрый день" : "Добрый вечер";
 
   return (
     <div style={s.page}>
       <NavBar />
       <div style={s.profileWrap}>
-        <div style={s.card}>
+        <div style={s.profileCard}>
           <div style={s.avatar}>{user.username[0].toUpperCase()}</div>
-          <h1 style={s.greeting}>{greeting}, {user.username}!</h1>
-          <p style={s.email}>{user.email}</p>
-          <div style={s.badge}>{user.plan === "pro" ? "Pro" : "Free"}</div>
-          <button style={s.btn} onClick={logout}>Выйти</button>
+          <p style={s.greeting}>{greeting}</p>
+          <h1 style={s.profileName}>{user.username}</h1>
+          {user.email && <p style={s.profileEmail}>{user.email}</p>}
+          <span style={{ ...s.badge, ...(user.plan === "pro" ? s.badgePro : {}) }}>
+            {user.plan === "pro" ? "✦ Pro" : "Free"}
+          </span>
+          <div style={s.profileActions}>
+            <Link to="/preferences" style={s.profileActionBtn}>Настроить темы →</Link>
+            <button style={s.logoutBtn} onClick={logout}>Выйти</button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+// ─── TelegramWidget ───────────────────────────────────────────────────────────
 
 function TelegramWidget({ onAuth }: { onAuth: (data: object) => void }) {
   useEffect(() => {
@@ -328,6 +388,8 @@ function TelegramWidget({ onAuth }: { onAuth: (data: object) => void }) {
   }, []);
   return <div id="tg-widget" />;
 }
+
+// ─── LoginPage ────────────────────────────────────────────────────────────────
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -358,11 +420,7 @@ function LoginPage() {
       }
     } catch (err: any) {
       const msg = err.response?.data?.detail;
-      if (Array.isArray(msg)) {
-        setError(msg[0]?.msg ?? "Ошибка");
-      } else {
-        setError(msg ?? "Что-то пошло не так");
-      }
+      setError(Array.isArray(msg) ? msg[0]?.msg : (msg ?? "Что-то пошло не так"));
     } finally {
       setLoading(false);
     }
@@ -376,55 +434,51 @@ function LoginPage() {
   return (
     <div style={s.authPage}>
       <div style={s.authCard}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>News Radar</h1>
-        <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 20 }}>
-          Новости с AI-персонализацией
-        </p>
-
-        <div style={s.tabs}>
-          <button style={tab === "login" ? s.tabActive : s.tab} onClick={() => { setTab("login"); setError(""); }}>
-            Войти
-          </button>
-          <button style={tab === "register" ? s.tabActive : s.tab} onClick={() => { setTab("register"); setError(""); }}>
-            Регистрация
-          </button>
+        <div style={s.authHeader}>
+          <span style={s.authLogoMark}>
+            <svg width="36" height="36" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <circle cx="4" cy="16" r="1.8" fill="currentColor" />
+              <path d="M4 16 Q4 4 16 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+              <path d="M4 16 Q4 9 11 9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+          </span>
+          <h1 style={s.authTitle}>News Radar</h1>
+          <p style={s.authSubtitle}>Новости с AI‑персонализацией</p>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
-          <input
-            style={s.input}
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-          />
+        <div style={s.tabs}>
+          {(["login", "register"] as const).map(t => (
+            <button
+              key={t}
+              style={tab === t ? s.tabActive : s.tab}
+              onClick={() => { setTab(t); setError(""); }}
+            >
+              {t === "login" ? "Войти" : "Регистрация"}
+            </button>
+          ))}
+        </div>
+
+        <form onSubmit={handleSubmit} style={s.form}>
+          <div style={s.inputWrap}>
+            <input style={s.input} type="email" placeholder="Email" value={email}
+              onChange={e => setEmail(e.target.value)} required autoComplete="email" />
+          </div>
           {tab === "register" && (
-            <input
-              style={s.input}
-              type="text"
-              placeholder="Имя пользователя"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              required
-              autoComplete="username"
-            />
+            <div style={s.inputWrap}>
+              <input style={s.input} type="text" placeholder="Имя пользователя" value={username}
+                onChange={e => setUsername(e.target.value)} required autoComplete="username" />
+            </div>
           )}
-          <input
-            style={s.input}
-            type="password"
-            placeholder="Пароль (минимум 8 символов)"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required
-            autoComplete={tab === "login" ? "current-password" : "new-password"}
-          />
+          <div style={s.inputWrap}>
+            <input style={s.input} type="password" placeholder="Пароль (минимум 8 символов)" value={password}
+              onChange={e => setPassword(e.target.value)} required
+              autoComplete={tab === "login" ? "current-password" : "new-password"} />
+          </div>
 
           {error && <p style={s.errorMsg}>{error}</p>}
 
           <button type="submit" style={s.submitBtn} disabled={loading}>
-            {loading ? "..." : tab === "login" ? "Войти" : "Создать аккаунт"}
+            {loading ? "…" : tab === "login" ? "Войти" : "Создать аккаунт"}
           </button>
         </form>
 
@@ -443,7 +497,7 @@ function LoginPage() {
           </svg>
           Войти через Google
         </a>
-        <div style={{ display: "flex", justifyContent: "center" }}>
+        <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
           <TelegramWidget onAuth={handleTelegramAuth} />
         </div>
       </div>
@@ -451,102 +505,50 @@ function LoginPage() {
   );
 }
 
+// ─── OAuthCallback ────────────────────────────────────────────────────────────
+
 function OAuthCallback() {
   const navigate = useNavigate();
   const location = useLocation();
-
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const code = params.get("code");
     if (!code) { navigate("/login", { replace: true }); return; }
     window.history.replaceState({}, "", "/oauth/callback");
-    // clear any existing tokens before exchanging the new code
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     api.post<{ access_token: string; refresh_token: string }>("/v1/auth/exchange", { code })
-      .then((r) => {
+      .then(r => {
         localStorage.setItem("access_token", r.data.access_token);
         localStorage.setItem("refresh_token", r.data.refresh_token);
         navigate("/feed", { replace: true });
       })
       .catch(() => navigate("/login", { replace: true }));
   }, []);
-
-  return <div style={s.center}>Входим...</div>;
+  return <div style={s.centerFull}><div className="skeleton" style={{ width: 160, height: 20 }} /></div>;
 }
 
-const s: Record<string, React.CSSProperties> = {
-  nav: {
-    position: "sticky",
-    top: 0,
-    zIndex: 100,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "0 20px",
-    height: 56,
-    background: "var(--bg-card)",
-    borderBottom: "1px solid var(--border)",
-  },
-  navLogo: {
-    fontSize: 18,
-    fontWeight: 700,
-    color: "var(--text)",
-    textDecoration: "none",
-  },
-  navLinks: {
-    display: "flex",
-    gap: 24,
-  },
-  navLink: {
-    color: "var(--text-muted)",
-    textDecoration: "none",
-    fontSize: 14,
-    fontWeight: 500,
-  },
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
-  page: {
-    minHeight: "100dvh",
-    background: "var(--bg)",
-  },
+const s: Record<string, React.CSSProperties> = {
+  // Layout
+  page: { minHeight: "100dvh", background: "var(--bg)" },
   feed: {
-    maxWidth: 680,
+    maxWidth: 700,
     margin: "0 auto",
-    padding: "16px 16px 40px",
+    padding: "20px 16px 60px",
     display: "flex",
     flexDirection: "column",
-    gap: 12,
+    gap: 10,
   },
-  empty: {
-    textAlign: "center",
-    padding: "60px 20px",
-    color: "var(--text-muted)",
-  },
-
-  pagination: {
+  centerFull: {
+    minHeight: "calc(100dvh - 56px)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 16,
-    padding: "16px 0",
-  },
-  pageBtn: {
-    padding: "8px 20px",
-    background: "var(--bg-card)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-sm)",
-    color: "var(--text)",
-    cursor: "pointer",
-    fontSize: 14,
-    fontWeight: 500,
-  },
-  pageInfo: {
-    color: "var(--text-muted)",
-    fontSize: 14,
-    minWidth: 60,
-    textAlign: "center" as const,
   },
 
+  // Card
   card: {
     background: "var(--bg-card)",
     border: "1px solid var(--border)",
@@ -555,6 +557,14 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 8,
+    boxShadow: "var(--shadow-card)",
+    transition: "transform 200ms var(--ease), box-shadow 200ms var(--ease), border-color 200ms var(--ease)",
+    cursor: "default",
+  },
+  cardHovered: {
+    transform: "translateY(-2px)",
+    boxShadow: "var(--shadow-hover)",
+    borderColor: "var(--border-hover)",
   },
   cardImage: {
     width: "100%",
@@ -567,176 +577,182 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 2,
   },
   source: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 600,
     color: "var(--accent)",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.07em",
   },
-  time: {
-    fontSize: 12,
-    color: "var(--text-muted)",
-  },
+  time: { fontSize: 11, color: "var(--text-subtle)" },
   cardTitle: {
     fontSize: 16,
-    fontWeight: 600,
-    lineHeight: 1.4,
+    fontWeight: 650,
+    lineHeight: 1.35,
     color: "var(--text)",
+    letterSpacing: "-0.01em",
   },
   cardBody: {
     fontSize: 14,
     color: "var(--text-muted)",
-    lineHeight: 1.6,
+    lineHeight: 1.65,
   },
-  readMore: {
-    fontSize: 13,
-    color: "var(--accent)",
-    textDecoration: "none",
-  },
-
-  topicsRow: {
-    display: "flex",
-    flexWrap: "wrap" as const,
-    gap: 6,
-  },
+  topicsRow: { display: "flex", flexWrap: "wrap" as const, gap: 5, marginTop: 2 },
   topicChip: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
     fontSize: 11,
     fontWeight: 500,
-    padding: "2px 8px",
+    padding: "3px 9px 3px 7px",
     borderRadius: 20,
     background: "var(--bg-elevated)",
-    border: "1px solid var(--border)",
+    border: "1px solid transparent",
     color: "var(--text-muted)",
   },
-
+  topicDot: { width: 5, height: 5, borderRadius: "50%", flexShrink: 0 },
   cardFooter: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: 4,
   },
-  reactionRow: {
-    display: "flex",
+  readMore: {
+    display: "inline-flex",
+    alignItems: "center",
     gap: 4,
+    fontSize: 12,
+    fontWeight: 500,
+    color: "var(--text-muted)",
+    transition: "color 150ms ease",
   },
+  reactionRow: { display: "flex", gap: 3 },
   reactionBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "5px 9px",
     background: "transparent",
     border: "1px solid var(--border)",
-    borderRadius: "var(--radius-sm)",
-    padding: "5px 8px",
+    borderRadius: "var(--radius-xs)",
+    color: "var(--text-subtle)",
     cursor: "pointer",
-    color: "var(--text-muted)",
-    display: "flex",
-    alignItems: "center",
-    transition: "color 0.15s, border-color 0.15s",
+    fontSize: 12,
+    fontWeight: 500,
+    transition: "color 150ms ease, border-color 150ms ease, background 150ms ease",
   },
   reactionLike: {
     color: "var(--success)",
     borderColor: "var(--success)",
+    background: "var(--success-dim)",
   },
   reactionDislike: {
     color: "var(--danger)",
     borderColor: "var(--danger)",
+    background: "var(--danger-dim)",
   },
 
-  endMsg: {
-    textAlign: "center",
-    color: "var(--text-muted)",
+  // Feed meta
+  guestBanner: {
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-sm)",
+    padding: "12px 16px",
     fontSize: 13,
-    padding: "16px",
+    color: "var(--text-muted)",
+    textAlign: "center" as const,
+    lineHeight: 1.6,
   },
-
-  profileWrap: {
-    minHeight: "calc(100dvh - 56px)",
+  empty: {
+    textAlign: "center" as const,
+    padding: "80px 20px",
+    color: "var(--text-muted)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 8,
+  },
+  emptyIcon: { fontSize: 40, marginBottom: 8 },
+  pagination: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    gap: 12,
+    padding: "20px 0 8px",
+  },
+  pageBtn: {
+    padding: "8px 18px",
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+    fontSize: 13,
+    fontWeight: 500,
+    transition: "color 150ms ease, border-color 150ms ease",
+  },
+  pageInfo: {
+    color: "var(--text-subtle)",
+    fontSize: 13,
+    minWidth: 52,
+    textAlign: "center" as const,
+  },
+
+  // Profile
+  profileWrap: {
+    minHeight: "calc(100dvh - 54px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "20px 16px",
+  },
+  profileCard: {
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius)",
+    padding: "40px 32px",
+    width: "100%",
+    maxWidth: 360,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 8,
+    textAlign: "center" as const,
   },
   avatar: {
-    width: 72,
-    height: 72,
+    width: 68,
+    height: 68,
     borderRadius: "50%",
-    background: "var(--accent)",
+    background: "var(--accent-dim)",
+    border: "2px solid var(--accent)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: 700,
-    marginBottom: 8,
-  },
-  greeting: {
-    fontSize: 22,
-    fontWeight: 600,
-    textAlign: "center",
-  },
-  email: {
-    color: "var(--text-muted)",
-    fontSize: 14,
-  },
-  badge: {
-    background: "var(--bg-elevated)",
-    border: "1px solid var(--border)",
-    borderRadius: 20,
-    padding: "2px 14px",
-    fontSize: 13,
-    color: "var(--text-muted)",
-  },
-  btn: {
-    marginTop: 16,
-    padding: "10px 24px",
-    background: "transparent",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-sm)",
-    color: "var(--text-muted)",
-    cursor: "pointer",
-    fontSize: 14,
-  },
-
-  tabs: {
-    display: "flex",
-    width: "100%",
-    background: "var(--bg-elevated)",
-    borderRadius: "var(--radius-sm)",
-    padding: 3,
-    gap: 3,
+    color: "var(--accent)",
     marginBottom: 4,
   },
-  tab: {
-    flex: 1,
-    padding: "7px 0",
-    background: "transparent",
-    border: "none",
-    borderRadius: "var(--radius-sm)",
-    color: "var(--text-muted)",
-    cursor: "pointer",
-    fontSize: 14,
-    fontWeight: 500,
-  },
-  tabActive: {
-    flex: 1,
-    padding: "7px 0",
-    background: "var(--bg-card)",
-    border: "none",
-    borderRadius: "var(--radius-sm)",
-    color: "var(--text)",
-    cursor: "pointer",
-    fontSize: 14,
+  greeting: { fontSize: 12, color: "var(--text-subtle)", textTransform: "uppercase" as const, letterSpacing: "0.08em" },
+  profileName: { fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" },
+  profileEmail: { fontSize: 13, color: "var(--text-muted)" },
+  badge: {
+    fontSize: 11,
     fontWeight: 600,
-  },
-  input: {
-    width: "100%",
-    padding: "11px 14px",
+    padding: "3px 12px",
+    borderRadius: 20,
     background: "var(--bg-elevated)",
     border: "1px solid var(--border)",
-    borderRadius: "var(--radius-sm)",
-    color: "var(--text)",
-    fontSize: 14,
-    outline: "none",
+    color: "var(--text-muted)",
+    letterSpacing: "0.04em",
+    marginTop: 4,
   },
-  submitBtn: {
-    width: "100%",
+  badgePro: { color: "var(--accent)", borderColor: "var(--accent)", background: "var(--accent-dim)" },
+  profileActions: { display: "flex", flexDirection: "column", gap: 8, width: "100%", marginTop: 16 },
+  profileActionBtn: {
+    display: "block",
     padding: "11px",
     background: "var(--accent)",
     border: "none",
@@ -744,37 +760,27 @@ const s: Record<string, React.CSSProperties> = {
     color: "#fff",
     fontSize: 14,
     fontWeight: 600,
-    cursor: "pointer",
-    marginTop: 2,
-  },
-  errorMsg: {
-    color: "var(--danger)",
-    fontSize: 13,
     textAlign: "center" as const,
+    textDecoration: "none",
   },
-  divider: {
-    display: "flex",
-    alignItems: "center",
-    width: "100%",
-    gap: 10,
-    margin: "4px 0",
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    background: "var(--border)",
-  },
-  dividerText: {
+  logoutBtn: {
+    padding: "10px",
+    background: "transparent",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-sm)",
     color: "var(--text-muted)",
-    fontSize: 12,
+    cursor: "pointer",
+    fontSize: 14,
   },
 
+  // Auth
   authPage: {
     minHeight: "100dvh",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     background: "var(--bg)",
+    padding: "20px 16px",
   },
   authCard: {
     background: "var(--bg-card)",
@@ -786,47 +792,93 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    gap: "12px",
+    gap: "14px",
   },
-  googleBtn: {
+  authHeader: { textAlign: "center" as const, marginBottom: 4 },
+  authLogoMark: { fontSize: 28, color: "var(--accent)" },
+  authTitle: { fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 4 },
+  authSubtitle: { fontSize: 13, color: "var(--text-muted)", marginTop: 4 },
+  tabs: {
     display: "flex",
-    alignItems: "center",
-    gap: 12,
-    padding: "12px 24px",
+    width: "100%",
+    background: "var(--bg-elevated)",
+    borderRadius: "var(--radius-sm)",
+    padding: 3,
+    gap: 3,
+  },
+  tab: {
+    flex: 1,
+    padding: "8px 0",
+    background: "transparent",
+    border: "none",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+    fontSize: 13,
+    fontWeight: 500,
+    transition: "color 150ms ease",
+  },
+  tabActive: {
+    flex: 1,
+    padding: "8px 0",
+    background: "var(--bg-card)",
+    border: "none",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text)",
+    cursor: "pointer",
+    fontSize: 13,
+    fontWeight: 600,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+  },
+  form: { width: "100%", display: "flex", flexDirection: "column", gap: 8 },
+  inputWrap: { width: "100%" },
+  input: {
+    width: "100%",
+    padding: "11px 14px",
     background: "var(--bg-elevated)",
     border: "1px solid var(--border)",
     borderRadius: "var(--radius-sm)",
     color: "var(--text)",
-    fontSize: 15,
+    fontSize: 14,
+    outline: "none",
+    transition: "border-color 150ms ease",
+  },
+  submitBtn: {
+    width: "100%",
+    padding: "12px",
+    background: "var(--accent)",
+    border: "none",
+    borderRadius: "var(--radius-sm)",
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    marginTop: 2,
+    transition: "opacity 150ms ease",
+  },
+  errorMsg: { color: "var(--danger)", fontSize: 12, textAlign: "center" as const },
+  divider: { display: "flex", alignItems: "center", width: "100%", gap: 10 },
+  dividerLine: { flex: 1, height: 1, background: "var(--border)" },
+  dividerText: { color: "var(--text-subtle)", fontSize: 11 },
+  googleBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "11px 20px",
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text)",
+    fontSize: 14,
     fontWeight: 500,
     textDecoration: "none",
     width: "100%",
     justifyContent: "center",
-  },
-
-  guestBanner: {
-    background: "var(--bg-elevated)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-sm)",
-    padding: "12px 16px",
-    fontSize: 14,
-    color: "var(--text-muted)",
-    textAlign: "center" as const,
-  },
-  guestBannerLink: {
-    color: "var(--accent)",
-    fontWeight: 600,
-    textDecoration: "none",
-  },
-
-  center: {
-    minHeight: "100dvh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "var(--text-muted)",
+    transition: "border-color 150ms ease",
   },
 };
+
+// ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
   useTelegramWebApp();
