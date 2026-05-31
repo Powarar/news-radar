@@ -2,6 +2,7 @@ import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -38,8 +39,10 @@ async def add_source(
     """Добавить новый источник (TG канал или сайт)."""
     try:
         source = await repo.create(data.model_dump())
-    except Exception:
-        raise HTTPException(400, "Source already exists or invalid data")
+    except IntegrityError:
+        raise HTTPException(409, "Source with this URL already exists")
+    except ValueError as e:
+        raise HTTPException(422, str(e))
     return {
         "id": source.id,
         "name": source.name,

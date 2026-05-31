@@ -11,6 +11,15 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0",
 ]
 
+_client: httpx.Client | None = None
+
+
+def _get_client() -> httpx.Client:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.Client(follow_redirects=True, timeout=15)
+    return _client
+
 
 def fetch_rss(url: str) -> list[dict]:
     feed = feedparser.parse(url, agent=random.choice(USER_AGENTS))
@@ -55,7 +64,7 @@ def fetch_html(url: str) -> list[dict]:
     }
 
     try:
-        r = httpx.get(url, headers=headers, follow_redirects=True, timeout=15)
+        r = _get_client().get(url, headers=headers)
         r.raise_for_status()
     except Exception:
         return []

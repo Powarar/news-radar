@@ -10,6 +10,16 @@ USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
 ]
 
+# Один клиент на весь процесс — соединение с t.me переиспользуется между задачами
+_client: httpx.Client | None = None
+
+
+def _get_client() -> httpx.Client:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.Client(follow_redirects=True, timeout=15)
+    return _client
+
 
 def parse_channel(channel: str, limit: int = 20) -> list[dict]:
     headers = {
@@ -18,12 +28,7 @@ def parse_channel(channel: str, limit: int = 20) -> list[dict]:
     }
 
     try:
-        r = httpx.get(
-            f"https://t.me/s/{channel}",
-            headers=headers,
-            follow_redirects=True,
-            timeout=15,
-        )
+        r = _get_client().get(f"https://t.me/s/{channel}", headers=headers)
         r.raise_for_status()
     except httpx.HTTPStatusError as e:
         raise ValueError(f"Channel @{channel} not accessible: {e.response.status_code}")

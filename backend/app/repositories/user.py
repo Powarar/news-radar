@@ -33,7 +33,6 @@ class UserRepository:
 
     async def create_telegram(self, username: str, telegram_id: str) -> User:
         user = User(
-            email=f"tg_{telegram_id}@telegram.local",
             username=username,
             telegram_id=telegram_id,
         )

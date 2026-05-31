@@ -1,7 +1,8 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -42,6 +43,11 @@ app.include_router(news.router, prefix="/api/v1/news", tags=["news"])
 app.include_router(sources.router, prefix="/api/v1/sources", tags=["sources"])
 app.include_router(preferences.router, prefix="/api/v1/preferences", tags=["preferences"])
 app.include_router(bot.router, prefix="/api/bot", tags=["bot"])
+
+
+@app.exception_handler(LookupError)
+async def lookup_error_handler(request: Request, exc: LookupError) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 @app.get("/api/health")

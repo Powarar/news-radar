@@ -6,12 +6,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news import NewsItem, NewsReaction, ReactionType
 from app.models.source import Source
-from app.models.user import UserSourceSetting
+from app.models.user import UserSourceSetting, UserTopicPreference
 
 
 class NewsRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def get_preferred_topics(self, user_id: int) -> list[str]:
+        result = await self.db.execute(
+            select(UserTopicPreference.topic).where(
+                UserTopicPreference.user_id == user_id,
+                UserTopicPreference.weight > 0,
+            )
+        )
+        return list(result.scalars().all())
 
     async def get_feed(
         self,
@@ -19,7 +28,6 @@ class NewsRepository:
         offset: int,
         user_id: int | None = None,
         language: str | None = None,
-        preferred_topics: list[str] | None = None,
     ) -> tuple[list[dict], int]:
         sort_by = func.coalesce(NewsItem.published_at, NewsItem.created_at)
 
@@ -33,17 +41,18 @@ class NewsRepository:
             )
             stmt = stmt.where(NewsItem.source_id.not_in(blacklisted_sq))
 
+            preferred_topics = await self.get_preferred_topics(user_id)
+            if preferred_topics:
+                topics_jsonb = cast(NewsItem.topics, JSONB)
+                stmt = stmt.where(
+                    or_(
+                        NewsItem.topics.is_(None),
+                        *[topics_jsonb.has_key(t) for t in preferred_topics],
+                    )
+                )
+
         if language:
             stmt = stmt.where(NewsItem.language == language)
-
-        if preferred_topics:
-            topics_jsonb = cast(NewsItem.topics, JSONB)
-            stmt = stmt.where(
-                or_(
-                    NewsItem.topics.is_(None),
-                    *[topics_jsonb.has_key(t) for t in preferred_topics],
-                )
-            )
 
         total = await self.db.scalar(select(func.count()).select_from(stmt.subquery()))
 
@@ -116,7 +125,7 @@ class NewsRepository:
     async def add_reaction(self, user_id: int, news_id: int, reaction: ReactionType) -> NewsReaction | None:
         news = await self.db.scalar(select(NewsItem).where(NewsItem.id == news_id))
         if not news:
-            return None
+            raise LookupError(f"NewsItem {news_id} not found")
 
         if reaction == ReactionType.blacklist:
             await self.set_source_blacklisted(user_id, news.source_id)

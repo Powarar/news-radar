@@ -37,16 +37,30 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   worker:
     build: ./backend
-    command: celery -A app.workers.celery_app worker --loglevel=info -Q default,parsing,ai
+    command: celery -A app.workers.celery_app worker --loglevel=info -Q default,parsing,ai,notifications,preferences
     volumes:
       - ./backend:/app
     env_file: .env
     depends_on:
-      - backend
-      - redis
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout=5 2>/dev/null | grep -q pong || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   beat:
     build: ./backend
@@ -55,7 +69,8 @@ services:
       - ./backend:/app
     env_file: .env
     depends_on:
-      - worker
+      worker:
+        condition: service_healthy
 
   frontend:
     build:

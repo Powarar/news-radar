@@ -6,6 +6,7 @@ from collections import defaultdict
 
 from sqlalchemy import and_, create_engine, select
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 from app.models.news import NewsItem  # noqa: F401
@@ -18,7 +19,7 @@ from app.services.ai.summarizer import summarize
 
 logger = logging.getLogger(__name__)
 
-engine = create_engine(settings.database_url_sync)
+engine = create_engine(settings.database_url_sync, poolclass=NullPool)
 SyncSessionLocal = sessionmaker(engine)
 
 
@@ -197,12 +198,21 @@ def fetch_website(source_id: int):
 # ─────────────────────────────────────────────────────────────
 
 
-async def _process(text):                                                                                                                                                               
-    topics, summary = await asyncio.gather(classify(text), summarize(text))                                                                                                             
-    return topics, summary 
+async def _process(text):
+    topics_result, summary_result = await asyncio.gather(
+        classify(text), summarize(text), return_exceptions=True
+    )
+    topics = topics_result if not isinstance(topics_result, Exception) else {}
+    summary = summary_result if not isinstance(summary_result, Exception) else None
+    if isinstance(topics_result, Exception):
+        logger.error("classify failed: %s", topics_result)
+    if isinstance(summary_result, Exception):
+        logger.error("summarize failed: %s", summary_result)
+    return topics, summary
 
-@celery_app.task(name="app.workers.tasks.process_news_ai")
-def process_news_ai(news_id: int):
+
+@celery_app.task(name="app.workers.tasks.process_news_ai", bind=True, max_retries=3)
+def process_news_ai(self, news_id: int):
     """Classify topics, score importance, generate summary via HuggingFace."""
     with SyncSessionLocal() as session:
         news = session.scalar(select(NewsItem).where(NewsItem.id == news_id))
@@ -221,7 +231,12 @@ def process_news_ai(news_id: int):
         news.importance_score = score_importance(topics)
         session.commit()
 
-        # Dispatch notification to matched TG users
+        if not topics:
+            countdown = 30 * (2 ** self.request.retries)  # 30s, 60s, 120s
+            logger.warning("classify returned nothing for news_id=%d, retry %d in %ds",
+                           news_id, self.request.retries + 1, countdown)
+            raise self.retry(countdown=countdown)
+
         send_notifications.delay(news_id)
 
 # ─────────────────────────────────────────────────────────────
@@ -319,27 +334,27 @@ def send_notifications(news_item_id: int):
             ]]
         }
 
-        for user_id, (telegram_id, prefs) in user_prefs.items():
-            matching = [t for t in prefs if t in news_topics and news_topics[t] > 0.2]
-            if not matching:
-                continue
+        with httpx.Client(timeout=10) as client:
+            for user_id, (telegram_id, prefs) in user_prefs.items():
+                matching = [t for t in prefs if t in news_topics and news_topics[t] > 0.2]
+                if not matching:
+                    continue
 
-            try:
-                resp = httpx.post(
-                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                    json={
-                        "chat_id": telegram_id,
-                        "text": text,
-                        "parse_mode": "HTML",
-                        "disable_web_page_preview": True,
-                        "reply_markup": keyboard,
-                    },
-                    timeout=10,
-                )
-                if resp.status_code != 200:
-                    logger.warning(
-                        "Failed to send notification to user_id=%d telegram_id=%s: %s",
-                        user_id, telegram_id, resp.text,
+                try:
+                    resp = client.post(
+                        f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                        json={
+                            "chat_id": telegram_id,
+                            "text": text,
+                            "parse_mode": "HTML",
+                            "disable_web_page_preview": True,
+                            "reply_markup": keyboard,
+                        },
                     )
-            except Exception:
-                logger.exception("Error sending notification to user_id=%d", user_id)
+                    if resp.status_code != 200:
+                        logger.warning(
+                            "Failed to send notification to user_id=%d telegram_id=%s: %s",
+                            user_id, telegram_id, resp.text,
+                        )
+                except Exception:
+                    logger.exception("Error sending notification to user_id=%d", user_id)
