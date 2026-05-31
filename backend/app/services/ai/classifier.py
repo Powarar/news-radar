@@ -5,7 +5,6 @@ Falls back to keyword classifier if Groq is unavailable.
 
 import json
 import logging
-import time
 
 import httpx
 
