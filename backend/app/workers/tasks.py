@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 
@@ -198,19 +197,6 @@ def fetch_website(source_id: int):
 # ─────────────────────────────────────────────────────────────
 
 
-async def _process(text):
-    topics_result, summary_result = await asyncio.gather(
-        classify(text), summarize(text), return_exceptions=True
-    )
-    topics = topics_result if not isinstance(topics_result, Exception) else {}
-    summary = summary_result if not isinstance(summary_result, Exception) else None
-    if isinstance(topics_result, Exception):
-        logger.error("classify failed: %s", topics_result)
-    if isinstance(summary_result, Exception):
-        logger.error("summarize failed: %s", summary_result)
-    return topics, summary
-
-
 @celery_app.task(name="app.workers.tasks.process_news_ai", bind=True, max_retries=3)
 def process_news_ai(self, news_id: int):
     """Classify topics, score importance, generate summary via HuggingFace."""
@@ -220,11 +206,18 @@ def process_news_ai(self, news_id: int):
             return
         text = (news.title or "") + " " + news.body
 
+        topics: dict = {}
+        summary: str | None = None
+
         try:
-            topics, summary = asyncio.run(_process(text))
+            topics = classify(text)
         except Exception:
-            logger.exception("AI processing failed for news_id=%d, saving without AI", news_id)
-            topics, summary = {}, None
+            logger.exception("classify failed for news_id=%d", news_id)
+
+        try:
+            summary = summarize(text)
+        except Exception:
+            logger.exception("summarize failed for news_id=%d", news_id)
 
         news.topics = json.dumps(topics)
         news.summary = summary
