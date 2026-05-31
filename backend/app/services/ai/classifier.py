@@ -5,6 +5,7 @@ Falls back to keyword classifier if Groq is unavailable.
 
 import json
 import logging
+import re
 
 import httpx
 
@@ -23,12 +24,22 @@ TOPICS = [
 ]
 
 _SYSTEM_PROMPT = """\
-You are a news classifier. Given a news text, return a JSON object with confidence scores (0.0–1.0) for each topic.
-Only include topics with score > 0.2. Reply with ONLY valid JSON, no explanation.
+You are a news topic classifier. Your response must be a single JSON object — nothing else. No explanation, no markdown, no code fences, no text before or after.
 
-Topics: politics, military, technology, health, science, business, sports, culture, environment
+Assign confidence scores (0.0–1.0) only to relevant topics from this list:
+politics, military, technology, health, science, business, sports, culture, environment
 
-Example output: {"technology": 0.95, "business": 0.6}"""
+Rules:
+- Omit topics with score <= 0.2
+- If no topic applies, return {}
+- Output format: {"topic": score, ...}
+
+Examples:
+Input: "Apple releases new iPhone model with AI features"
+Output: {"technology": 0.95, "business": 0.6}
+
+Input: "President signs new trade agreement"
+Output: {"politics": 0.9, "business": 0.5}"""
 
 _client: httpx.Client | None = None
 
@@ -64,15 +75,15 @@ def classify(text: str) -> dict[str, float]:
         resp.raise_for_status()
         content = resp.json()["choices"][0]["message"]["content"].strip()
 
-        # убираем markdown ```json ... ``` если модель добавила
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
+        # extract first {...} block even if model added surrounding text
+        match = re.search(r"\{[^{}]*\}", content)
+        if not match:
+            logger.warning("Groq classify: no JSON object found | raw: %.200s", content)
+            return classify_keywords(text)
 
-        result = json.loads(content)
+        result = json.loads(match.group())
         return {k: float(v) for k, v in result.items() if k in TOPICS}
 
     except Exception as e:
-        logger.warning("Groq classify failed: %s — using keyword fallback", e)
+        logger.warning("Groq classify failed: %s | raw: %.200s — using keyword fallback", e, locals().get("content", ""))
         return classify_keywords(text)
