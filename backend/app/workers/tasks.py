@@ -197,40 +197,25 @@ def fetch_website(source_id: int):
 # ─────────────────────────────────────────────────────────────
 
 
-@celery_app.task(name="app.workers.tasks.process_news_ai", bind=True, max_retries=3)
-def process_news_ai(self, news_id: int):
-    """Classify topics, score importance, generate summary via HuggingFace."""
+@celery_app.task(name="app.workers.tasks.process_news_ai")
+def process_news_ai(news_id: int):
+    """Classify topics and generate summary via Groq (keyword fallback if unavailable)."""
     with SyncSessionLocal() as session:
         news = session.scalar(select(NewsItem).where(NewsItem.id == news_id))
         if not news:
             return
         text = (news.title or "") + " " + news.body
 
-        topics: dict = {}
-        summary: str | None = None
+        topics = classify(text)   # never raises — falls back to keywords
+        summary = summarize(text)  # returns None if unavailable
 
-        try:
-            topics = classify(text)
-        except Exception:
-            logger.exception("classify failed for news_id=%d", news_id)
-
-        try:
-            summary = summarize(text)
-        except Exception:
-            logger.exception("summarize failed for news_id=%d", news_id)
-
-        news.topics = json.dumps(topics)
+        news.topics = json.dumps(topics) if topics else None
         news.summary = summary
         news.importance_score = score_importance(topics)
         session.commit()
 
-        if not topics:
-            countdown = 30 * (2 ** self.request.retries)  # 30s, 60s, 120s
-            logger.warning("classify returned nothing for news_id=%d, retry %d in %ds",
-                           news_id, self.request.retries + 1, countdown)
-            raise self.retry(countdown=countdown)
-
-        send_notifications.delay(news_id)
+        if topics:
+            send_notifications.delay(news_id)
 
 # ─────────────────────────────────────────────────────────────
 #  update_topic_preferences — обновляет веса топиков юзера

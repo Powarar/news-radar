@@ -63,10 +63,13 @@ class Settings(BaseSettings):
     telegram_api_hash: str = ""
     telegram_session_name: str = "newsradar"
 
-    # HuggingFace
+    # HuggingFace (deprecated, kept for compatibility)
     huggingface_api_token: str = ""
     hf_classifier_model_url: str = ""
     hf_summarizer_model_url: str = ""
+
+    # Groq
+    groq_api_key: str = ""
 
 
 settings = Settings()

@@ -1,10 +1,9 @@
 """
-Multilingual summarization via HuggingFace (csebuetnlp/mT5_multilingual_XLSum).
-Supports 45+ languages including Russian and English.
+Summarization via Groq API (llama-3.1-8b-instant).
+Returns None if Groq is unavailable — news is saved without summary.
 """
 
 import logging
-import time
 
 import httpx
 
@@ -12,7 +11,13 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_MAX_CHARS = 1024
+_MAX_CHARS = 3000
+_GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+_MODEL = "llama-3.1-8b-instant"
+
+_SYSTEM_PROMPT = """\
+You are a news summarizer. Summarize the given news article in 2–3 sentences.
+Be concise and factual. Reply in the same language as the article."""
 
 _client: httpx.Client | None = None
 
@@ -20,41 +25,34 @@ _client: httpx.Client | None = None
 def _get_client() -> httpx.Client:
     global _client
     if _client is None or _client.is_closed:
-        _client = httpx.Client(
-            headers={
-                "Authorization": f"Bearer {settings.huggingface_api_token}",
-                "Content-Type": "application/json",
-            },
-            timeout=60,
-        )
+        _client = httpx.Client(timeout=20)
     return _client
 
 
-def summarize(text: str, retries: int = 3) -> str:
-    payload = {"inputs": text[:_MAX_CHARS]}
-    last_exc: Exception | None = None
+def summarize(text: str) -> str | None:
+    if not settings.groq_api_key:
+        return None
 
-    for attempt in range(retries):
-        try:
-            resp = _get_client().post(settings.hf_summarizer_model_url, json=payload)
+    try:
+        resp = _get_client().post(
+            _GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {settings.groq_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": _MODEL,
+                "messages": [
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user", "content": text[:_MAX_CHARS]},
+                ],
+                "temperature": 0.3,
+                "max_tokens": 200,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
 
-            if resp.status_code == 503:
-                data = resp.json()
-                wait = min(float(data.get("estimated_time", 20)), 60)
-                logger.warning("HF model loading, waiting %.1fs (attempt %d)", wait, attempt + 1)
-                time.sleep(wait)
-                continue
-
-            resp.raise_for_status()
-            data = resp.json()
-
-        except httpx.HTTPError as exc:
-            last_exc = exc
-            backoff = 2 ** attempt
-            logger.warning("HF request failed (attempt %d): %s — retrying in %ds", attempt + 1, exc, backoff)
-            time.sleep(backoff)
-            continue
-
-        return data[0]["summary_text"]
-
-    raise RuntimeError(f"summarize failed after {retries} attempts") from last_exc
+    except Exception as e:
+        logger.warning("Groq summarize failed: %s", e)
+        return None
