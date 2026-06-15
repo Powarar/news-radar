@@ -15,7 +15,8 @@ celery_app.conf.task_routes = {
     "app.workers.tasks.fetch_telegram_channel":     {"queue": "parsing"},
     "app.workers.tasks.fetch_website":              {"queue": "parsing"},
     "app.workers.tasks.process_news_ai":            {"queue": "ai"},
-    "app.workers.tasks.send_notifications":         {"queue": "notifications"},
+    "app.workers.tasks.send_notifications":          {"queue": "notifications"},
+    "app.workers.tasks.send_single_notification":   {"queue": "notifications"},
     "app.workers.tasks.update_topic_preferences":   {"queue": "preferences"}
 }
 

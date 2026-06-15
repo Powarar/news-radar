@@ -1,9 +1,14 @@
 
+import logging
 import random
+from datetime import datetime, timezone
+from urllib.parse import urlparse
+
 import feedparser
 import httpx
 from bs4 import BeautifulSoup
-from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -66,7 +71,8 @@ def fetch_html(url: str) -> list[dict]:
     try:
         r = _get_client().get(url, headers=headers)
         r.raise_for_status()
-    except Exception:
+    except Exception as e:
+        logger.warning("fetch_html failed for %s: %s", url, e)
         return []
 
     soup = BeautifulSoup(r.text, "html.parser")
@@ -91,7 +97,6 @@ def fetch_html(url: str) -> list[dict]:
             continue
 
         if link.startswith("/"):
-            from urllib.parse import urlparse
             parsed = urlparse(url)
             link = f"{parsed.scheme}://{parsed.netloc}{link}"
 
@@ -107,7 +112,6 @@ def fetch_html(url: str) -> list[dict]:
 
 
 def fetch_site(url: str) -> list[dict]:
-    from urllib.parse import urlparse
     parsed = urlparse(url)
     base = f"{parsed.scheme}://{parsed.netloc}"
 

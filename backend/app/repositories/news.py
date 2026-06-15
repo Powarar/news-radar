@@ -1,6 +1,6 @@
 import json
 
-from sqlalchemy import cast, desc, func, or_, select, case
+from sqlalchemy import Float, cast, desc, func, literal, or_, select, case
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,14 +13,14 @@ class NewsRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_preferred_topics(self, user_id: int) -> list[str]:
+    async def get_user_preferences(self, user_id: int) -> dict[str, float]:
         result = await self.db.execute(
-            select(UserTopicPreference.topic).where(
+            select(UserTopicPreference.topic, UserTopicPreference.weight).where(
                 UserTopicPreference.user_id == user_id,
                 UserTopicPreference.weight > 0,
             )
         )
-        return list(result.scalars().all())
+        return {row.topic: float(row.weight) for row in result}
 
     async def get_feed(
         self,
@@ -29,9 +29,11 @@ class NewsRepository:
         user_id: int | None = None,
         language: str | None = None,
     ) -> tuple[list[dict], int]:
-        sort_by = func.coalesce(NewsItem.published_at, NewsItem.created_at)
+        date_sort = func.coalesce(NewsItem.published_at, NewsItem.created_at)
 
         stmt = select(NewsItem, Source).join(Source, NewsItem.source_id == Source.id)
+
+        order_by = [desc(date_sort)]
 
         if user_id:
             blacklisted_sq = (
@@ -41,22 +43,36 @@ class NewsRepository:
             )
             stmt = stmt.where(NewsItem.source_id.not_in(blacklisted_sq))
 
-            preferred_topics = await self.get_preferred_topics(user_id)
-            if preferred_topics:
+            prefs = await self.get_user_preferences(user_id)
+            if prefs:
                 topics_jsonb = cast(NewsItem.topics, JSONB)
                 stmt = stmt.where(
                     or_(
                         NewsItem.topics.is_(None),
-                        *[topics_jsonb.has_key(t) for t in preferred_topics],
+                        *[topics_jsonb.has_key(t) for t in prefs],
                     )
                 )
+
+                # relevance = Σ(user_weight × news_topic_score)
+                score_parts = [
+                    case(
+                        (topics_jsonb.has_key(topic), weight * cast(topics_jsonb[topic].as_string(), Float)),
+                        else_=literal(0.0),
+                    )
+                    for topic, weight in prefs.items()
+                ]
+                relevance = score_parts[0]
+                for part in score_parts[1:]:
+                    relevance = relevance + part
+
+                order_by = [desc(relevance), desc(date_sort)]
 
         if language:
             stmt = stmt.where(NewsItem.language == language)
 
         total = await self.db.scalar(select(func.count()).select_from(stmt.subquery()))
 
-        result = await self.db.execute(stmt.order_by(desc(sort_by)).limit(limit).offset(offset))
+        result = await self.db.execute(stmt.order_by(*order_by).limit(limit).offset(offset))
         rows = result.all()
 
         user_reactions: dict[int, str] = {}

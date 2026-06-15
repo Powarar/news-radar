@@ -52,6 +52,9 @@ def _get_client() -> httpx.Client:
 
 
 def classify(text: str) -> dict[str, float]:
+    if not text or not text.strip():
+        return {}
+
     if not settings.groq_api_key:
         return classify_keywords(text)
 

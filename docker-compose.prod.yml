@@ -6,38 +6,67 @@ services:
     env_file: .env.prod
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newsradar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     volumes:
       - redis_data:/data
     restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: ./backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
     env_file: .env.prod
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/docs || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   worker:
     build: ./backend
-    command: celery -A app.workers.celery_app worker --loglevel=info -Q default,parsing,ai --concurrency=4
+    command: celery -A app.workers.celery_app worker --loglevel=info -Q default,parsing,ai,notifications,preferences --concurrency=4
     env_file: .env.prod
     depends_on:
-      - backend
-      - redis
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout=5 2>/dev/null | grep -q pong || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   beat:
     build: ./backend
     command: celery -A app.workers.celery_app beat --loglevel=info
     env_file: .env.prod
     depends_on:
-      - worker
+      worker:
+        condition: service_healthy
     restart: always
 
   frontend:
@@ -56,6 +85,17 @@ services:
     env_file: .env.prod
     depends_on:
       - backend
+    restart: always
+
+  flower:
+    build: ./backend
+    command: celery -A app.workers.celery_app flower --port=5555
+    env_file: .env.prod
+    ports:
+      - "127.0.0.1:5555:5555"
+    depends_on:
+      - redis
+      - worker
     restart: always
 
   nginx:

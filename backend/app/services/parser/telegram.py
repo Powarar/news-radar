@@ -1,4 +1,6 @@
 import random
+import re
+
 import httpx
 from bs4 import BeautifulSoup
 
@@ -58,8 +60,9 @@ def parse_channel(channel: str, limit: int = 20) -> list[dict]:
         image_url = None
         if photo_el:
             style = photo_el.get("style", "")
-            if "url(" in style:
-                image_url = style.split("url('")[1].split("')")[0]
+            m = re.search(r"url\(['\"]?(https?://[^'\")\s]+)['\"]?\)", style)
+            if m:
+                image_url = m.group(1)
 
         results.append({
             "text": text,

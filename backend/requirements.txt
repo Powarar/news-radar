@@ -43,3 +43,4 @@ pytz==2024.2
 
 # Monitoring
 prometheus-fastapi-instrumentator==7.0.0
+flower==2.0.1

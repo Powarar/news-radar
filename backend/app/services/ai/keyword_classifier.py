@@ -71,7 +71,6 @@ KEYWORDS: dict[str, list[str]] = {
     ],
 }
 
-_MIN_SCORE = 0.35
 _BASE_SCORE = 0.6
 _PER_MATCH = 0.08
 

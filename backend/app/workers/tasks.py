@@ -3,6 +3,7 @@ import logging
 
 from collections import defaultdict
 
+import httpx
 from sqlalchemy import and_, create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
@@ -20,6 +21,15 @@ logger = logging.getLogger(__name__)
 
 engine = create_engine(settings.database_url_sync, poolclass=NullPool)
 SyncSessionLocal = sessionmaker(engine)
+
+_tg_client: httpx.Client | None = None
+
+
+def _get_tg_client() -> httpx.Client:
+    global _tg_client
+    if _tg_client is None or _tg_client.is_closed:
+        _tg_client = httpx.Client(timeout=10)
+    return _tg_client
 
 
 # ─────────────────────────────────────────────────────────────
@@ -95,12 +105,14 @@ def fetch_telegram_channel(source_id: int):
             session.commit()
             return str(e)
 
+        incoming_urls = [p["url"] for p in posts]
+        existing_urls = set(session.execute(
+            select(NewsItem.url).where(NewsItem.url.in_(incoming_urls))
+        ).scalars().all())
+
         saved = 0
         for post in posts:
-            exists = session.execute(
-                select(NewsItem.id).where(NewsItem.url == post["url"])
-            ).scalar_one_or_none()
-            if exists:
+            if post["url"] in existing_urls:
                 continue
 
             # Парсим дату
@@ -154,15 +166,14 @@ def fetch_website(source_id: int):
 
         items = fetch_site(source.url)
 
+        incoming_urls = [i["url"] for i in items if i.get("url")]
+        existing_urls = set(session.execute(
+            select(NewsItem.url).where(NewsItem.url.in_(incoming_urls))
+        ).scalars().all()) if incoming_urls else set()
+
         saved = 0
         for item in items:
-            if not item.get("url"):
-                continue
-
-            exists = session.execute(
-                select(NewsItem.id).where(NewsItem.url == item["url"])
-            ).scalar_one_or_none()
-            if exists:
+            if not item.get("url") or item["url"] in existing_urls:
                 continue
 
             published_at = None
@@ -231,20 +242,23 @@ def update_topic_preferences(user_id: int, news_id: int, reaction: str):
         news_topics = json.loads(item.topics)  # {"politics": 0.9, "military": 0.6}
         delta = 0.1 if reaction == "like" else -0.1
 
+        topics_to_update = [t for t, s in news_topics.items() if s >= 0.3]
+
+        existing = session.scalars(
+            select(UserTopicPreference).where(
+                UserTopicPreference.user_id == user_id,
+                UserTopicPreference.topic.in_(topics_to_update),
+            )
+        ).all()
+        prefs_map = {p.topic: p for p in existing}
+
         for topic, score in news_topics.items():
             if score < 0.3:
                 continue
-
-            pref = session.scalar(
-                select(UserTopicPreference).where(
-                    UserTopicPreference.user_id == user_id,
-                    UserTopicPreference.topic == topic,
-                )
-            )
+            pref = prefs_map.get(topic)
             if not pref:
                 pref = UserTopicPreference(user_id=user_id, topic=topic, weight=0.5)
                 session.add(pref)
-
             pref.weight = max(0.0, min(1.0, pref.weight + delta * score))
 
         session.commit()
@@ -252,9 +266,7 @@ def update_topic_preferences(user_id: int, news_id: int, reaction: str):
 
 @celery_app.task(name="app.workers.tasks.send_notifications")
 def send_notifications(news_item_id: int):
-    """Push relevant news to matched users via TG bot."""
-    import httpx
-
+    """Fan-out: find matched users and dispatch one task per user."""
     with SyncSessionLocal() as session:
         news = session.scalar(select(NewsItem).where(NewsItem.id == news_item_id))
         if not news or not news.topics:
@@ -262,12 +274,10 @@ def send_notifications(news_item_id: int):
 
         news_topics = json.loads(news.topics)
 
-        bot_token = settings.telegram_bot_token
-        if not bot_token:
+        if not settings.telegram_bot_token:
             logger.warning("TELEGRAM_BOT_TOKEN not set, skipping notifications")
             return
 
-        # One query: all telegram users joined with their topic preferences
         rows = session.execute(
             select(User.id, User.telegram_id, UserTopicPreference.topic)
             .join(UserTopicPreference, and_(
@@ -284,13 +294,7 @@ def send_notifications(news_item_id: int):
             logger.info("No Telegram users with preferences found")
             return
 
-        # Group topics by user
-        user_prefs: dict[int, tuple[str, list[str]]] = defaultdict(lambda: ("", []))
-        for user_id, telegram_id, topic in rows:
-            _, topics = user_prefs[user_id]
-            user_prefs[user_id] = (telegram_id, topics + [topic])
-
-        # Build message
+        # Build message once — same for all users
         title = news.title or "Без заголовка"
         topics_str = ", ".join(
             f"{topic}: {score:.0%}" for topic, score in
@@ -298,41 +302,60 @@ def send_notifications(news_item_id: int):
         )
         summary_line = f"\n\n{news.summary}" if news.summary else ""
         url_line = f"\n\nПодробнее: {news.url}" if news.url else ""
-
         text = (
             f"<b>{title}</b>\n"
             f"Темы: {topics_str}{summary_line}{url_line}"
         )
 
-        keyboard = {
-            "inline_keyboard": [[
-                {"text": "↑ 0", "callback_data": f"like:{news_item_id}"},
-                {"text": "↓ 0", "callback_data": f"dislike:{news_item_id}"},
-                {"text": "✖", "callback_data": f"blacklist:{news_item_id}"},
-            ]]
-        }
 
-        with httpx.Client(timeout=10) as client:
-            for user_id, (telegram_id, prefs) in user_prefs.items():
-                matching = [t for t in prefs if t in news_topics and news_topics[t] > 0.2]
-                if not matching:
-                    continue
+        user_prefs: dict[int, tuple[str, list[str]]] = defaultdict(lambda: ("", []))
+        for user_id, telegram_id, topic in rows:
+            _, topics = user_prefs[user_id]
+            user_prefs[user_id] = (telegram_id, topics + [topic])
 
-                try:
-                    resp = client.post(
-                        f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                        json={
-                            "chat_id": telegram_id,
-                            "text": text,
-                            "parse_mode": "HTML",
-                            "disable_web_page_preview": True,
-                            "reply_markup": keyboard,
-                        },
-                    )
-                    if resp.status_code != 200:
-                        logger.warning(
-                            "Failed to send notification to user_id=%d telegram_id=%s: %s",
-                            user_id, telegram_id, resp.text,
-                        )
-                except Exception:
-                    logger.exception("Error sending notification to user_id=%d", user_id)
+        dispatched = 0
+        for user_id, (telegram_id, prefs) in user_prefs.items():
+            matching = [t for t in prefs if t in news_topics and news_topics[t] > 0.2]
+            if not matching:
+                continue
+            send_single_notification.delay(telegram_id, text, news_item_id)
+            dispatched += 1
+
+        logger.info("Dispatched %d notifications for news_id=%d", dispatched, news_item_id)
+
+
+@celery_app.task(
+    name="app.workers.tasks.send_single_notification",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=3,
+    rate_limit="6/s",
+)
+def send_single_notification(telegram_id: str, text: str, news_item_id: int):
+    """Send one Telegram message to one user."""
+    bot_token = settings.telegram_bot_token
+    keyboard = {
+        "inline_keyboard": [[
+            {"text": "↑ 0", "callback_data": f"like:{news_item_id}"},
+            {"text": "↓ 0", "callback_data": f"dislike:{news_item_id}"},
+            {"text": "✖", "callback_data": f"blacklist:{news_item_id}"},
+        ]]
+    }
+
+    resp = _get_tg_client().post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            json={
+                "chat_id": telegram_id,
+                "text": text,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+                "reply_markup": keyboard,
+            },
+        )
+
+    if resp.status_code == 429:
+        retry_after = resp.json().get("parameters", {}).get("retry_after", 10)
+        raise Exception(f"TG rate limit, retry after {retry_after}s")
+
+    if resp.status_code != 200:
+        raise Exception(f"TG sendMessage failed: {resp.status_code} {resp.text}")
