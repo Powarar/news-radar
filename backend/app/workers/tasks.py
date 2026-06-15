@@ -270,9 +270,16 @@ def update_topic_preferences(user_id: int, news_id: int, reaction: str):
 @celery_app.task(name="app.workers.tasks.send_notifications")
 def send_notifications(news_item_id: int):
     """Fan-out: find matched users and dispatch one task per user."""
+    from datetime import datetime, timezone, timedelta
+
     with SyncSessionLocal() as session:
         news = session.scalar(select(NewsItem).where(NewsItem.id == news_item_id))
         if not news or not news.topics:
+            return
+
+        news_time = news.published_at or news.created_at
+        if news_time and datetime.now(timezone.utc) - news_time > timedelta(hours=2):
+            logger.info("Skipping notification for old news_id=%d", news_item_id)
             return
 
         news_topics = json.loads(news.topics)
@@ -294,12 +301,19 @@ def send_notifications(news_item_id: int):
             return
 
         # Build message once — same for all users
-        title = news.title or "Без заголовка"
+        title = news.title or ""
+        if not title and news.body:
+            title = news.body[:160].rstrip()
+            if len(news.body) > 160:
+                title += "…"
+        title = title or "Без заголовка"
+
         topics_str = ", ".join(
             f"{topic}: {score:.0%}" for topic, score in
             sorted(news_topics.items(), key=lambda x: x[1], reverse=True)[:3]
         )
-        summary_line = f"\n\n{news.summary}" if news.summary else ""
+        # Show summary only for articles with a real title (TG body is already the title)
+        summary_line = f"\n\n{news.summary}" if news.summary and news.title else ""
         url_line = f"\n\nПодробнее: {news.url}" if news.url else ""
         text = (
             f"<b>{title}</b>\n"
