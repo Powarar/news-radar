@@ -22,6 +22,16 @@ class NewsRepository:
         )
         return {row.topic: float(row.weight) for row in result}
 
+    async def get_excluded_topics(self, user_id: int) -> set[str]:
+        """Topics the user explicitly set to 'Не читаю' (weight = 0, row exists)."""
+        result = await self.db.execute(
+            select(UserTopicPreference.topic).where(
+                UserTopicPreference.user_id == user_id,
+                UserTopicPreference.weight == 0,
+            )
+        )
+        return {row.topic for row in result}
+
     async def get_feed(
         self,
         limit: int,
@@ -46,8 +56,21 @@ class NewsRepository:
             order_by = [desc(func.coalesce(NewsItem.importance_score, 0.0)), desc(date_sort)]
         elif sort_by == "relevance" and user_id:
             prefs = await self.get_user_preferences(user_id)
+            excluded = await self.get_excluded_topics(user_id)
+            topics_jsonb = cast(NewsItem.topics, JSONB)
+
+            # Hard exclusion: if user set "Не читаю" for a topic and it dominates
+            # the news (score > 0.5), hide it — even if another liked topic is present
+            for topic in excluded:
+                stmt = stmt.where(
+                    or_(
+                        NewsItem.topics.is_(None),
+                        ~topics_jsonb.has_key(topic),
+                        cast(topics_jsonb[topic].as_string(), Float) <= 0.5,
+                    )
+                )
+
             if prefs:
-                topics_jsonb = cast(NewsItem.topics, JSONB)
                 # relevance = Σ(user_weight × news_topic_score)
                 score_parts = [
                     case(
@@ -59,8 +82,6 @@ class NewsRepository:
                 relevance = score_parts[0]
                 for part in score_parts[1:]:
                     relevance = relevance + part
-                # Filter by minimum relevance: avoids news where a disliked topic dominates
-                # even if a liked topic appears as a minor label (has_key was too permissive)
                 stmt = stmt.where(
                     or_(NewsItem.topics.is_(None), relevance > 0.05)
                 )
