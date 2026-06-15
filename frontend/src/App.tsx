@@ -87,10 +87,11 @@ const TOPIC_COLORS: Record<string, string> = {
 
 // ─── NewsCard ─────────────────────────────────────────────────────────────────
 
-function NewsCard({ item, user, onReact }: {
+function NewsCard({ item, user, onReact, enterDelay = 0 }: {
   item: NewsItem;
   user: User | null;
   onReact: (newsId: number, reaction: string) => Promise<void>;
+  enterDelay?: number;
 }) {
   const [localReaction, setLocalReaction] = useState<string | null>(item.reaction ?? null);
   const [localLikes, setLocalLikes] = useState(item.likes_count);
@@ -140,7 +141,8 @@ function NewsCard({ item, user, onReact }: {
 
   return (
     <article
-      style={{ ...s.card, ...(hovered ? s.cardHovered : {}) }}
+      className="card-enter"
+      style={{ ...s.card, ...(hovered ? s.cardHovered : {}), animationDelay: `${enterDelay}ms` }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -291,22 +293,33 @@ function FeedPage() {
   return (
     <div style={s.page}>
       <NavBar />
-      <main style={s.feed}>
+      <main className="page-enter" style={s.feed}>
         {!userLoading && !user && <GuestBanner />}
 
         {loading ? (
           Array.from({ length: 5 }).map((_, i) => <CardSkeleton key={i} />)
         ) : items.length === 0 ? (
           <div style={s.empty}>
-            <div style={s.emptyIcon}>📡</div>
+            <svg width="52" height="52" viewBox="0 0 52 52" fill="none" aria-hidden="true" style={{ color: "var(--text-subtle)", marginBottom: 8 }}>
+              <circle cx="12" cy="40" r="3.5" fill="currentColor" opacity="0.4" />
+              <path d="M12 40 Q12 26 28 26" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" opacity="0.35"/>
+              <path d="M12 40 Q12 16 38 16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" opacity="0.2"/>
+              <path d="M12 40 Q12 6 48 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" opacity="0.1"/>
+            </svg>
             <p style={{ fontWeight: 600, marginBottom: 6 }}>Новостей пока нет</p>
             <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
               Запустите парсинг через Celery worker
             </p>
           </div>
         ) : (
-          items.map(item => (
-            <NewsCard key={item.id} item={item} user={user} onReact={handleReact} />
+          items.map((item, i) => (
+            <NewsCard
+              key={item.id}
+              item={item}
+              user={user}
+              onReact={handleReact}
+              enterDelay={Math.min(i * 35, 280)}
+            />
           ))
         )}
 
@@ -352,7 +365,7 @@ function ProfilePage() {
   return (
     <div style={s.page}>
       <NavBar />
-      <div style={s.profileWrap}>
+      <div className="page-enter" style={s.profileWrap}>
         <div style={s.profileCard}>
           <div style={s.avatar}>{user.username[0].toUpperCase()}</div>
           <p style={s.greeting}>{greeting}</p>

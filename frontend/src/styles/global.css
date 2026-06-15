@@ -101,6 +101,39 @@ input[type=range]::-moz-range-thumb {
   border: none;
 }
 
+/* Page transitions */
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: pageEnter 240ms var(--ease) both;
+}
+
+/* Card stagger */
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.card-enter {
+  animation: cardEnter 220ms var(--ease) both;
+}
+
+/* Nav link hover */
+.nav-link:hover {
+  background: rgba(255,255,255,0.05) !important;
+  color: var(--text) !important;
+}
+
+/* Nav active dot */
+@keyframes navDotIn {
+  from { opacity: 0; transform: translateX(-50%) scaleX(0); }
+  to   { opacity: 1; transform: translateX(-50%) scaleX(1); }
+}
+.nav-dot {
+  animation: navDotIn 180ms var(--ease) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

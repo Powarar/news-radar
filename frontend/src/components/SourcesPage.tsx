@@ -158,7 +158,7 @@ export default function SourcesPage() {
     <div style={s.page}>
       <NavBar />
 
-      <div style={s.wrap}>
+      <div className="page-enter" style={s.wrap}>
         <div style={s.headerRow}>
           <h1 style={s.heading}>Источники</h1>
           <button onClick={() => setShowAdd(!showAdd)} style={showAdd ? s.cancelBtn : s.addBtn}>

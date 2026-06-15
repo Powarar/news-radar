@@ -29,9 +29,9 @@ export default function NavBar() {
         {NAV_LINKS.map(({ to, label }) => {
           const active = pathname === to || (to !== "/feed" && pathname.startsWith(to));
           return (
-            <Link key={to} to={to} style={{ ...s.navLink, ...(active ? s.navLinkActive : {}) }}>
+            <Link key={to} to={to} className="nav-link" style={{ ...s.navLink, ...(active ? s.navLinkActive : {}) }}>
               {label}
-              {active && <span style={s.navLinkDot} />}
+              {active && <span className="nav-dot" style={s.navLinkDot} />}
             </Link>
           );
         })}
@@ -84,12 +84,12 @@ const s: Record<string, CSSProperties> = {
   navLinkActive: { color: "var(--text)" },
   navLinkDot: {
     position: "absolute",
-    bottom: 0,
+    bottom: 1,
     left: "50%",
     transform: "translateX(-50%)",
-    width: 4,
-    height: 4,
-    borderRadius: "50%",
+    width: 20,
+    height: 2,
+    borderRadius: 1,
     background: "var(--accent)",
   },
 };

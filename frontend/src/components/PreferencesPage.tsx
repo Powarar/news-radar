@@ -113,7 +113,7 @@ export default function PreferencesPage() {
   return (
     <div style={s.page}>
       <NavBar />
-      <div style={s.wrap}>
+      <div className="page-enter" style={s.wrap}>
         <div style={s.header}>
           <h1 style={s.heading}>Настройте ленту</h1>
           <p style={s.subtitle}>Как часто вы хотите видеть каждую тему?</p>
