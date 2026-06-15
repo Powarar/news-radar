@@ -4,7 +4,7 @@ import logging
 from collections import defaultdict
 
 import httpx
-from sqlalchemy import and_, create_engine, select
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 

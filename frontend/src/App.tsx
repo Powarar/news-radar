@@ -253,9 +253,9 @@ function GuestBanner() {
 type SortMode = "relevance" | "date" | "importance";
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
-  { value: "relevance", label: "Персонально" },
-  { value: "importance", label: "Важность" },
-  { value: "date", label: "Дата" },
+  { value: "relevance", label: "Для вас" },
+  { value: "importance", label: "Важные" },
+  { value: "date", label: "Новые" },
 ];
 
 const LIMIT = 20;

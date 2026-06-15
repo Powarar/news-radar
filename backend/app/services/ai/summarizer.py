@@ -17,7 +17,8 @@ _MODEL = "llama-3.1-8b-instant"
 
 _SYSTEM_PROMPT = """\
 You are a news summarizer. Summarize the given news article in 2–3 sentences.
-Be concise and factual. Reply in the same language as the article."""
+Be concise and factual. Reply in the same language as the article.
+Do not use any emoji or special symbols — plain text only."""
 
 _client: httpx.Client | None = None
 
