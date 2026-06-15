@@ -65,7 +65,8 @@ class NewsRepository:
                 for part in score_parts[1:]:
                     relevance = relevance + part
 
-                order_by = [desc(relevance), desc(date_sort)]
+                day_bucket = func.date_trunc("day", date_sort)
+                order_by = [desc(day_bucket), desc(date_sort), desc(relevance)]
 
         if language:
             stmt = stmt.where(NewsItem.language == language)
