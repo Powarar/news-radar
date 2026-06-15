@@ -143,68 +143,6 @@ function NewsCard({ item, user, onReact, enterDelay = 0 }: {
       className="card-enter"
       style={{ ...s.card, animationDelay: `${enterDelay}ms` }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={s.cardMeta}>
-          <span style={s.source}>{item.source.name}</span>
-          <span style={s.metaSep}>·</span>
-          <span style={s.time}>{timeAgo(item.published_at ?? item.created_at)}</span>
-        </div>
-
-        {item.title && <h2 style={s.cardTitle}>{item.title}</h2>}
-        <p style={s.cardBody}>{text}</p>
-
-        <div style={s.cardFooter}>
-          {topTopics.length > 0 ? (
-            <div style={s.topicsRow}>
-              {topTopics.map(([topic]) => (
-                <span key={topic} style={{ ...s.topicTag, color: TOPIC_COLORS[topic] ?? "var(--text-muted)" }}>
-                  {TOPIC_LABELS[topic] ?? topic}
-                </span>
-              ))}
-            </div>
-          ) : <span />}
-
-          <div style={s.cardActions}>
-            {user && (
-              <div style={s.reactionRow}>
-                <button
-                  style={{ ...s.reactionBtn, ...(localReaction === "like" ? s.reactionLike : {}) }}
-                  onClick={() => handleReact("like")}
-                  disabled={loading}
-                  aria-label="Нравится"
-                  title="Нравится"
-                >
-                  <IconThumbUp /> {localLikes > 0 && <span>{localLikes}</span>}
-                </button>
-                <button
-                  style={{ ...s.reactionBtn, ...(localReaction === "dislike" ? s.reactionDislike : {}) }}
-                  onClick={() => handleReact("dislike")}
-                  disabled={loading}
-                  aria-label="Не нравится"
-                  title="Не нравится"
-                >
-                  <IconThumbDown />
-                </button>
-                <button
-                  style={s.reactionBtn}
-                  onClick={() => handleReact("blacklist")}
-                  disabled={loading}
-                  aria-label="Скрыть источник"
-                  title="Скрыть источник"
-                >
-                  <IconBan />
-                </button>
-              </div>
-            )}
-            {item.url && (
-              <a href={item.url} target="_blank" rel="noreferrer" style={s.readMore}>
-                Читать <IconExternalLink />
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-
       {item.image_url && (
         <img
           src={item.image_url}
@@ -213,6 +151,66 @@ function NewsCard({ item, user, onReact, enterDelay = 0 }: {
           onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
         />
       )}
+
+      <div style={s.cardMeta}>
+        <span style={s.source}>{item.source.name}</span>
+        <span style={s.metaSep}>·</span>
+        <span style={s.time}>{timeAgo(item.published_at ?? item.created_at)}</span>
+      </div>
+
+      {item.title && <h2 style={s.cardTitle}>{item.title}</h2>}
+      <p style={s.cardBody}>{text}</p>
+
+      <div style={s.cardFooter}>
+        {topTopics.length > 0 ? (
+          <div style={s.topicsRow}>
+            {topTopics.map(([topic]) => (
+              <span key={topic} style={{ ...s.topicTag, color: TOPIC_COLORS[topic] ?? "var(--text-muted)" }}>
+                {TOPIC_LABELS[topic] ?? topic}
+              </span>
+            ))}
+          </div>
+        ) : <span />}
+
+        <div style={s.cardActions}>
+          {user && (
+            <div style={s.reactionRow}>
+              <button
+                style={{ ...s.reactionBtn, ...(localReaction === "like" ? s.reactionLike : {}) }}
+                onClick={() => handleReact("like")}
+                disabled={loading}
+                aria-label="Нравится"
+                title="Нравится"
+              >
+                <IconThumbUp /> {localLikes > 0 && <span>{localLikes}</span>}
+              </button>
+              <button
+                style={{ ...s.reactionBtn, ...(localReaction === "dislike" ? s.reactionDislike : {}) }}
+                onClick={() => handleReact("dislike")}
+                disabled={loading}
+                aria-label="Не нравится"
+                title="Не нравится"
+              >
+                <IconThumbDown /> {localDislikes > 0 && <span>{localDislikes}</span>}
+              </button>
+              <button
+                style={s.reactionBtn}
+                onClick={() => handleReact("blacklist")}
+                disabled={loading}
+                aria-label="Скрыть источник"
+                title="Скрыть источник"
+              >
+                <IconBan />
+              </button>
+            </div>
+          )}
+          {item.url && (
+            <a href={item.url} target="_blank" rel="noreferrer" style={s.readMore}>
+              Читать <IconExternalLink />
+            </a>
+          )}
+        </div>
+      </div>
     </article>
   );
 }
@@ -221,23 +219,21 @@ function NewsCard({ item, user, onReact, enterDelay = 0 }: {
 
 function CardSkeleton() {
   return (
-    <div style={{ display: "flex", gap: 16, padding: "20px 0", borderBottom: "1px solid var(--border)" }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <div className="skeleton" style={{ width: 64, height: 10 }} />
-          <div className="skeleton" style={{ width: 28, height: 10 }} />
-        </div>
-        <div className="skeleton" style={{ width: "88%", height: 20, marginBottom: 6 }} />
-        <div className="skeleton" style={{ width: "72%", height: 20, marginBottom: 12 }} />
-        <div className="skeleton" style={{ width: "100%", height: 13, marginBottom: 5 }} />
-        <div className="skeleton" style={{ width: "85%", height: 13, marginBottom: 5 }} />
-        <div className="skeleton" style={{ width: "60%", height: 13, marginBottom: 14 }} />
-        <div style={{ display: "flex", gap: 10 }}>
-          <div className="skeleton" style={{ width: 52, height: 10 }} />
-          <div className="skeleton" style={{ width: 44, height: 10 }} />
-        </div>
+    <div style={{ padding: "20px 0", borderBottom: "1px solid var(--border)" }}>
+      <div className="skeleton" style={{ width: "100%", height: 160, borderRadius: 8, marginBottom: 14 }} />
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        <div className="skeleton" style={{ width: 64, height: 10 }} />
+        <div className="skeleton" style={{ width: 28, height: 10 }} />
       </div>
-      <div className="skeleton" style={{ width: 88, height: 60, borderRadius: 6, flexShrink: 0 }} />
+      <div className="skeleton" style={{ width: "88%", height: 20, marginBottom: 6 }} />
+      <div className="skeleton" style={{ width: "72%", height: 20, marginBottom: 12 }} />
+      <div className="skeleton" style={{ width: "100%", height: 13, marginBottom: 5 }} />
+      <div className="skeleton" style={{ width: "85%", height: 13, marginBottom: 5 }} />
+      <div className="skeleton" style={{ width: "60%", height: 13, marginBottom: 14 }} />
+      <div style={{ display: "flex", gap: 10 }}>
+        <div className="skeleton" style={{ width: 52, height: 10 }} />
+        <div className="skeleton" style={{ width: 44, height: 10 }} />
+      </div>
     </div>
   );
 }
@@ -254,6 +250,14 @@ function GuestBanner() {
   );
 }
 
+type SortMode = "relevance" | "date" | "importance";
+
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: "relevance", label: "Персонально" },
+  { value: "importance", label: "Важность" },
+  { value: "date", label: "Дата" },
+];
+
 const LIMIT = 20;
 
 function FeedPage() {
@@ -262,12 +266,13 @@ function FeedPage() {
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [sort, setSort] = useState<SortMode>("relevance");
 
-  async function loadPage(p: number) {
+  async function loadPage(p: number, sortMode: SortMode = sort) {
     setLoading(true);
     try {
       const r = await api.get<{ items: NewsItem[]; total: number }>(
-        `/v1/news/?limit=${LIMIT}&offset=${p * LIMIT}`
+        `/v1/news/?limit=${LIMIT}&offset=${p * LIMIT}&sort=${sortMode}`
       );
       setItems(r.data.items);
       setTotal(r.data.total);
@@ -278,17 +283,29 @@ function FeedPage() {
     }
   }
 
+  function changeSort(mode: SortMode) {
+    setSort(mode);
+    loadPage(0, mode);
+  }
+
   useEffect(() => { loadPage(0); }, []);
 
+  // Guests can't use personalization — switch default chip to "date" after load
+  useEffect(() => {
+    if (!userLoading && !user && sort === "relevance") setSort("date");
+  }, [userLoading, user]);
+
   async function handleReact(newsId: number, reaction: string) {
-    await api.post(`/v1/news/${newsId}/react`, { reaction });
+    const r = await api.post<{ likes: number; dislikes: number }>(`/v1/news/${newsId}/react`, { reaction });
     if (reaction === "blacklist") {
       const sourceId = items.find(x => x.id === newsId)?.source.id;
       setItems(prev => prev.filter(i => i.source.id !== sourceId));
     } else {
-      setItems(prev => prev.map(i =>
-        i.id === newsId ? { ...i, reaction: reaction as NewsItem["reaction"] } : i
-      ));
+      setItems(prev => prev.map(i => {
+        if (i.id !== newsId) return i;
+        const newReaction = i.reaction === reaction ? null : (reaction as NewsItem["reaction"]);
+        return { ...i, reaction: newReaction, likes_count: r.data.likes, dislikes_count: r.data.dislikes };
+      }));
     }
   }
 
@@ -299,6 +316,27 @@ function FeedPage() {
       <NavBar />
       <main className="page-enter" style={s.feed}>
         {!userLoading && !user && <GuestBanner />}
+
+        <div style={s.sortBar}>
+          {SORT_OPTIONS.map(opt => {
+            const isPersonal = opt.value === "relevance";
+            const disabled = isPersonal && !user;
+            return (
+              <button
+                key={opt.value}
+                style={{
+                  ...s.sortChip,
+                  ...(sort === opt.value ? s.sortChipActive : {}),
+                  ...(disabled ? s.sortChipDisabled : {}),
+                }}
+                onClick={() => !disabled && changeSort(opt.value)}
+                title={disabled ? "Войдите, чтобы включить персонализацию" : undefined}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
 
         {loading ? (
           Array.from({ length: 5 }).map((_, i) => <CardSkeleton key={i} />)
@@ -564,19 +602,17 @@ const s: Record<string, React.CSSProperties> = {
 
   // Article row — editorial, no card chrome
   card: {
-    display: "flex",
-    gap: 16,
-    alignItems: "flex-start",
     padding: "20px 0",
     borderBottom: "1px solid var(--border)",
   },
   cardThumb: {
-    width: 88,
-    height: 60,
+    display: "block",
+    width: "100%",
+    height: 200,
     objectFit: "cover" as const,
-    borderRadius: 6,
-    flexShrink: 0,
-    opacity: 0.92,
+    borderRadius: 8,
+    marginBottom: 14,
+    opacity: 0.93,
   },
   cardMeta: {
     display: "flex",
@@ -659,6 +695,35 @@ const s: Record<string, React.CSSProperties> = {
   reactionDislike: {
     color: "var(--danger)",
     background: "var(--danger-dim)",
+  },
+
+  // Sort bar
+  sortBar: {
+    display: "flex",
+    gap: 6,
+    marginBottom: 16,
+  },
+  sortChip: {
+    padding: "5px 14px",
+    background: "transparent",
+    border: "1px solid var(--border)",
+    borderRadius: 20,
+    color: "var(--text-muted)",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 500,
+    transition: "all 140ms ease",
+    lineHeight: 1.4,
+  },
+  sortChipActive: {
+    background: "var(--accent)",
+    borderColor: "var(--accent)",
+    color: "#fff",
+    fontWeight: 600,
+  },
+  sortChipDisabled: {
+    opacity: 0.35,
+    cursor: "not-allowed",
   },
 
   // Feed meta

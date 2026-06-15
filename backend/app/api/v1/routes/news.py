@@ -22,12 +22,14 @@ def get_news_service(db: Annotated[AsyncSession, Depends(get_db)]) -> NewsServic
 async def get_feed(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    sort: str = Query("relevance", pattern="^(relevance|date|importance)$"),
     user: OptionalUser = None,
     repo: NewsRepository = Depends(get_news_repo),
 ):
     items, total = await repo.get_feed(
         limit, offset,
         user_id=user.id if user else None,
+        sort_by=sort,
     )
     return {"items": items, "offset": offset, "limit": limit, "total": total}
 

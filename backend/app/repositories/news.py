@@ -28,13 +28,12 @@ class NewsRepository:
         offset: int,
         user_id: int | None = None,
         language: str | None = None,
+        sort_by: str = "relevance",
     ) -> tuple[list[dict], int]:
         date_sort = func.coalesce(NewsItem.published_at, NewsItem.created_at)
-
         stmt = select(NewsItem, Source).join(Source, NewsItem.source_id == Source.id)
 
-        order_by = [desc(date_sort)]
-
+        # Blacklist always applies when logged in
         if user_id:
             blacklisted_sq = (
                 select(UserSourceSetting.source_id)
@@ -43,16 +42,12 @@ class NewsRepository:
             )
             stmt = stmt.where(NewsItem.source_id.not_in(blacklisted_sq))
 
+        if sort_by == "importance":
+            order_by = [desc(func.coalesce(NewsItem.importance_score, 0.0)), desc(date_sort)]
+        elif sort_by == "relevance" and user_id:
             prefs = await self.get_user_preferences(user_id)
             if prefs:
                 topics_jsonb = cast(NewsItem.topics, JSONB)
-                stmt = stmt.where(
-                    or_(
-                        NewsItem.topics.is_(None),
-                        *[topics_jsonb.has_key(t) for t in prefs],
-                    )
-                )
-
                 # relevance = Σ(user_weight × news_topic_score)
                 score_parts = [
                     case(
@@ -64,9 +59,17 @@ class NewsRepository:
                 relevance = score_parts[0]
                 for part in score_parts[1:]:
                     relevance = relevance + part
-
+                # Filter by minimum relevance: avoids news where a disliked topic dominates
+                # even if a liked topic appears as a minor label (has_key was too permissive)
+                stmt = stmt.where(
+                    or_(NewsItem.topics.is_(None), relevance > 0.05)
+                )
                 day_bucket = func.date_trunc("day", date_sort)
                 order_by = [desc(day_bucket), desc(date_sort), desc(relevance)]
+            else:
+                order_by = [desc(date_sort)]
+        else:  # "date" or "relevance" without user
+            order_by = [desc(date_sort)]
 
         if language:
             stmt = stmt.where(NewsItem.language == language)

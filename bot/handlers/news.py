@@ -3,7 +3,7 @@ import os
 import httpx
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
+from aiogram.types import CallbackQuery, InaccessibleMessage, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 
 router = Router()
 
@@ -97,6 +97,7 @@ async def handle_reaction(callback: CallbackQuery, http_client: httpx.AsyncClien
         "blacklist": "источник скрыт",
     }
     await callback.answer(labels.get(action, "OK"))
-    await callback.message.edit_reply_markup(
-        reply_markup=news_keyboard(int(news_id), likes, dislikes)
-    )
+    if not isinstance(callback.message, InaccessibleMessage):
+        await callback.message.edit_reply_markup(
+            reply_markup=news_keyboard(int(news_id), likes, dislikes)
+        )

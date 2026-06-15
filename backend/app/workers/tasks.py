@@ -278,20 +278,16 @@ def send_notifications(news_item_id: int):
             logger.warning("TELEGRAM_BOT_TOKEN not set, skipping notifications")
             return
 
-        rows = session.execute(
-            select(User.id, User.telegram_id, UserTopicPreference.topic)
-            .join(UserTopicPreference, and_(
-                UserTopicPreference.user_id == User.id,
-                UserTopicPreference.weight > 0,
-            ))
+        all_users = session.execute(
+            select(User.id, User.telegram_id)
             .where(
                 User.telegram_id.isnot(None),
                 User.notifications_enabled,
             )
         ).all()
 
-        if not rows:
-            logger.info("No Telegram users with preferences found")
+        if not all_users:
+            logger.info("No Telegram users with notifications enabled")
             return
 
         # Build message once — same for all users
@@ -307,17 +303,27 @@ def send_notifications(news_item_id: int):
             f"Темы: {topics_str}{summary_line}{url_line}"
         )
 
+        user_ids = [u.id for u in all_users]
+        prefs_rows = session.execute(
+            select(UserTopicPreference.user_id, UserTopicPreference.topic)
+            .where(
+                UserTopicPreference.user_id.in_(user_ids),
+                UserTopicPreference.weight > 0,
+            )
+        ).all()
 
-        user_prefs: dict[int, tuple[str, list[str]]] = defaultdict(lambda: ("", []))
-        for user_id, telegram_id, topic in rows:
-            _, topics = user_prefs[user_id]
-            user_prefs[user_id] = (telegram_id, topics + [topic])
+        user_topics: dict[int, list[str]] = defaultdict(list)
+        for user_id, topic in prefs_rows:
+            user_topics[user_id].append(topic)
 
         dispatched = 0
-        for user_id, (telegram_id, prefs) in user_prefs.items():
-            matching = [t for t in prefs if t in news_topics and news_topics[t] > 0.2]
-            if not matching:
-                continue
+        for user_id, telegram_id in all_users:
+            prefs = user_topics.get(user_id)
+            if prefs:
+                matching = [t for t in prefs if t in news_topics and news_topics[t] > 0.2]
+                if not matching:
+                    continue
+            # No preferences yet → send everything (new subscriber)
             send_single_notification.delay(telegram_id, text, news_item_id)
             dispatched += 1
 

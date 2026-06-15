@@ -34,14 +34,17 @@ Stack: FastAPI + PostgreSQL + Celery + Redis + React + aiogram + Docker.
 
 - `GET /api/v1/preferences` and `PUT /api/v1/preferences` — stubs
 - `GET /api/v1/sources`, `POST /api/v1/sources`, `PATCH /api/v1/sources/{id}/toggle`, `PATCH /api/v1/sources/{id}/blacklist` — stubs
-- `send_notifications` Celery task — stub, bot push not implemented
 - Importance scoring in `services/ai/importance.py` — returns stub value, needs real formula
 - Bot `/settings` and `/sources` handlers — stubs, inline keyboards not done
 - Frontend preferences page and sources management page — not built
 - Alembic initial migration — must be generated after first `docker compose up`
-- Healthchecks for backend and worker in docker-compose
 - Structured logging — currently basic Python logging
 - Rate limiting on auth endpoints
+- Feed sort: `?sort=relevance|date|importance` реализован; идеи для дальнейшего развития:
+  - Семантический поиск (Qdrant) — см. `project_semantic_search.md`
+  - Фильтр по языку (`?lang=ru|en`) в UI
+  - Фильтр по источнику / теме через чипы
+  - Улучшить topic-фильтр в relevance-режиме: исключать новости где нежелательный топик доминирует (сейчас фильтр по `has_key` слишком мягкий)
 
 ## Running locally
 
