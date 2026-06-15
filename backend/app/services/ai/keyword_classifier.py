@@ -10,15 +10,22 @@ KEYWORDS: dict[str, list[str]] = {
         "политик", "парламент", "правительств", "президент", "выбор", "депутат",
         "закон", "министр", "санкц", "дипломат", "кремл", "госдум", "сенат",
         "оппозиц", "партия", "референдум", "конституц", "государств", "власт",
+        "саммит", "переговор", "соглашен", "договор", "визит", "встреч",
+        "путин", "зеленск", "трамп", "байден", "макрон", "шольц",
         "election", "government", "president", "parliament", "senate", "congress",
         "democrat", "republican", "policy", "diplomat", "sanction",
+        "summit", "negotiations", "treaty", "ceasefire", "bilateral", "foreign minister",
+        "zelensky", "putin", "trump", "biden", "macron",
     ],
     "military": [
         "армия", "войск", "военн", "удар", "обстрел", "наступлен", "оборон",
         "фронт", "бригад", "батальон", "ракет", "дрон", "беспилотн", "нато",
         "мобилизац", "генерал", "офицер", "потер", "взрыв", "бомб",
+        "крушен", "катастроф", "самолёт упал", "сбит",
         "military", "army", "troops", "attack", "defense", "weapon", "missile",
         "drone", "nato", "combat", "soldier", "war", "conflict",
+        "bomber", "warplane", "aircraft crash", "airstrike", "artillery",
+        "explosion", "blast", "shelling", "ammunition", "nuclear",
     ],
     "technology": [
         "технолог", "искусственн интеллект", "нейросет", "программ", "разработ",
@@ -65,9 +72,12 @@ KEYWORDS: dict[str, list[str]] = {
     "environment": [
         "экологи", "климат", "природ", "загрязнен", "выброс", "co2",
         "парников", "лес", "океан", "вид животн", "возобновляем", "солнечн",
-        "ветров", "зелён",
+        "ветров", "зелён", "наводнен", "потоп", "паводк", "шторм", "землетряс",
+        "пожар", "засух", "ураган",
         "environment", "climate", "nature", "pollution", "emission",
         "renewable", "solar", "wind", "forest", "ocean", "green",
+        "flood", "flooding", "storm", "hurricane", "earthquake", "wildfire",
+        "drought", "disaster", "heatwave",
     ],
 }
 

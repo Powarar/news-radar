@@ -81,12 +81,24 @@ def classify(text: str) -> dict[str, float]:
         # extract first {...} block even if model added surrounding text
         match = re.search(r"\{[^{}]*\}", content)
         if not match:
-            logger.warning("Groq classify: no JSON object found | raw: %.200s", content)
+            logger.warning(
+                "Groq classify: no JSON in response | raw=%r | text=%.120s",
+                content[:300], text[:120],
+            )
             return classify_keywords(text)
 
         result = json.loads(match.group())
-        return {k: float(v) for k, v in result.items() if k in TOPICS}
+        filtered = {k: float(v) for k, v in result.items() if k in TOPICS}
+        if not filtered:
+            logger.warning(
+                "Groq classify: returned 0 valid topics | raw=%r | text=%.120s",
+                content[:300], text[:120],
+            )
+        return filtered
 
     except Exception as e:
-        logger.warning("Groq classify failed: %s | raw: %.200s — using keyword fallback", e, locals().get("content", ""))
+        logger.warning(
+            "Groq classify failed: %s | raw=%r | text=%.120s",
+            e, locals().get("content", "")[:300], text[:120],
+        )
         return classify_keywords(text)

@@ -220,6 +220,9 @@ def process_news_ai(news_id: int):
         topics = classify(text)   # never raises — falls back to keywords
         summary = summarize(text)  # returns None if unavailable
 
+        if not topics:
+            logger.warning("No topics for news_id=%d | text=%.120s", news_id, text[:120])
+
         news.topics = json.dumps(topics) if topics else None
         news.summary = summary
         news.importance_score = score_importance(topics)
