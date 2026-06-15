@@ -1,5 +1,47 @@
 # TODO — News Radar
 
+## Семантический поиск (~5–7 вечеров)
+
+Юзер пишет "что происходит с ИИ в Китае" → находит релевантные новости даже без этих слов. Векторный поиск по embeddings.
+
+### Шаг 1 — Инфраструктура
+- [ ] Добавить `qdrant` в `docker-compose.yml` (image: qdrant/qdrant, port 6333, volume qdrant_data)
+- [ ] Добавить `QDRANT_URL=http://qdrant:6333` в `.env`
+
+### Шаг 2 — Зависимости
+- [ ] `sentence-transformers==3.0.1` и `qdrant-client==1.9.1` в `requirements.txt`
+- [ ] В `Dockerfile` закешировать модель при билде: `RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"`
+
+### Шаг 3 — Сервис эмбеддингов
+- [ ] Создать `app/services/ai/embeddings.py` — `encode(text) -> list[float]`, модель через `@lru_cache(maxsize=1)`
+
+### Шаг 4 — Qdrant коллекция
+- [ ] Создать `app/core/qdrant.py` — клиент + `init_collection()` (cosine, 384d)
+- [ ] Вызвать `init_collection()` в lifespan FastAPI
+
+### Шаг 5 — Celery таска индексации
+- [ ] Добавить `index_news(news_id, title, content, url)` в очередь `ai`
+- [ ] Вызывать `index_news.delay(...)` после сохранения новости (рядом с `process_news_ai`)
+
+### Шаг 6 — Эндпоинт поиска
+- [ ] Создать `app/api/v1/routes/search.py` — `GET /search?q=...` → encode → qdrant.search(score_threshold=0.4) → get_by_ids
+- [ ] Подключить роутер в `app/api/v1/__init__.py`
+
+### Шаг 7 — Реиндексация
+- [ ] Написать `scripts/reindex_news.py` — очередь Celery для всех существующих новостей
+
+### Шаг 8 — Деплой
+- [ ] Добавить qdrant в `docker-compose.prod.yml` (без expose порта наружу)
+- [ ] Добавить `qdrant_data` в volumes
+
+### После поиска
+- [ ] RAG: Qdrant топ-5 → Groq генерирует ответ (+20 строк)
+- [ ] Streaming SSE от Groq
+- [ ] Redis кеш для одинаковых запросов
+- [ ] Like/dislike на результаты → evaluation метрики
+
+---
+
 ## AI / Контент
 
 - [ ] Найти модель суммаризации которая не обрывает текст на полуслове (текущая `mT5_multilingual_XLSum` обрезает) — смотреть в сторону `facebook/bart-large-cnn` или `google/pegasus-xsum`

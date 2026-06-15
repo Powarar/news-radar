@@ -31,7 +31,7 @@ export default function NavBar() {
           return (
             <Link key={to} to={to} className="nav-link" style={{ ...s.navLink, ...(active ? s.navLinkActive : {}) }}>
               {label}
-              {active && <span className="nav-dot" style={s.navLinkDot} />}
+              {active && <span className="nav-dot" style={s.navLinkDot} aria-hidden="true" />}
             </Link>
           );
         })}

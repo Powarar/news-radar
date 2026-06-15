@@ -97,7 +97,6 @@ function NewsCard({ item, user, onReact, enterDelay = 0 }: {
   const [localLikes, setLocalLikes] = useState(item.likes_count);
   const [localDislikes, setLocalDislikes] = useState(item.dislikes_count);
   const [loading, setLoading] = useState(false);
-  const [hovered, setHovered] = useState(false);
 
   function timeAgo(iso: string) {
     const diff = Date.now() - new Date(iso).getTime();
@@ -142,77 +141,78 @@ function NewsCard({ item, user, onReact, enterDelay = 0 }: {
   return (
     <article
       className="card-enter"
-      style={{ ...s.card, ...(hovered ? s.cardHovered : {}), animationDelay: `${enterDelay}ms` }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      style={{ ...s.card, animationDelay: `${enterDelay}ms` }}
     >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={s.cardMeta}>
+          <span style={s.source}>{item.source.name}</span>
+          <span style={s.metaSep}>·</span>
+          <span style={s.time}>{timeAgo(item.published_at ?? item.created_at)}</span>
+        </div>
+
+        {item.title && <h2 style={s.cardTitle}>{item.title}</h2>}
+        <p style={s.cardBody}>{text}</p>
+
+        <div style={s.cardFooter}>
+          {topTopics.length > 0 ? (
+            <div style={s.topicsRow}>
+              {topTopics.map(([topic]) => (
+                <span key={topic} style={{ ...s.topicTag, color: TOPIC_COLORS[topic] ?? "var(--text-muted)" }}>
+                  {TOPIC_LABELS[topic] ?? topic}
+                </span>
+              ))}
+            </div>
+          ) : <span />}
+
+          <div style={s.cardActions}>
+            {user && (
+              <div style={s.reactionRow}>
+                <button
+                  style={{ ...s.reactionBtn, ...(localReaction === "like" ? s.reactionLike : {}) }}
+                  onClick={() => handleReact("like")}
+                  disabled={loading}
+                  aria-label="Нравится"
+                  title="Нравится"
+                >
+                  <IconThumbUp /> {localLikes > 0 && <span>{localLikes}</span>}
+                </button>
+                <button
+                  style={{ ...s.reactionBtn, ...(localReaction === "dislike" ? s.reactionDislike : {}) }}
+                  onClick={() => handleReact("dislike")}
+                  disabled={loading}
+                  aria-label="Не нравится"
+                  title="Не нравится"
+                >
+                  <IconThumbDown />
+                </button>
+                <button
+                  style={s.reactionBtn}
+                  onClick={() => handleReact("blacklist")}
+                  disabled={loading}
+                  aria-label="Скрыть источник"
+                  title="Скрыть источник"
+                >
+                  <IconBan />
+                </button>
+              </div>
+            )}
+            {item.url && (
+              <a href={item.url} target="_blank" rel="noreferrer" style={s.readMore}>
+                Читать <IconExternalLink />
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
       {item.image_url && (
         <img
           src={item.image_url}
           alt=""
-          style={s.cardImage}
+          style={s.cardThumb}
           onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
         />
       )}
-
-      <div style={s.cardMeta}>
-        <span style={s.source}>{item.source.name}</span>
-        <span style={s.time}>{timeAgo(item.published_at ?? item.created_at)}</span>
-      </div>
-
-      {item.title && <h2 style={s.cardTitle}>{item.title}</h2>}
-      <p style={s.cardBody}>{text}</p>
-
-      {topTopics.length > 0 && (
-        <div style={s.topicsRow}>
-          {topTopics.map(([topic]) => (
-            <span key={topic} style={{ ...s.topicChip, borderColor: TOPIC_COLORS[topic] ?? "var(--border)" }}>
-              <span style={{ ...s.topicDot, background: TOPIC_COLORS[topic] ?? "var(--text-muted)" }} />
-              {TOPIC_LABELS[topic] ?? topic}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div style={s.cardFooter}>
-        {item.url ? (
-          <a href={item.url} target="_blank" rel="noreferrer" style={s.readMore}>
-            Читать <IconExternalLink />
-          </a>
-        ) : <span />}
-
-        {user && (
-          <div style={s.reactionRow}>
-            <button
-              style={{ ...s.reactionBtn, ...(localReaction === "like" ? s.reactionLike : {}) }}
-              onClick={() => handleReact("like")}
-              disabled={loading}
-              aria-label="Нравится"
-              title="Нравится"
-            >
-              <IconThumbUp /> {localLikes > 0 && <span>{localLikes}</span>}
-            </button>
-            <button
-              style={{ ...s.reactionBtn, ...(localReaction === "dislike" ? s.reactionDislike : {}) }}
-              onClick={() => handleReact("dislike")}
-              disabled={loading}
-              aria-label="Не нравится"
-              title="Не нравится"
-            >
-              <IconThumbDown /> {localDislikes > 0 && <span>{localDislikes}</span>}
-            </button>
-            <button
-              style={s.reactionBtn}
-              onClick={() => handleReact("blacklist")}
-              disabled={loading}
-              aria-label="Скрыть источник"
-              title="Скрыть источник"
-            >
-              <IconBan />
-            </button>
-          </div>
-        )}
-      </div>
     </article>
   );
 }
@@ -221,19 +221,23 @@ function NewsCard({ item, user, onReact, enterDelay = 0 }: {
 
 function CardSkeleton() {
   return (
-    <div style={s.card}>
-      <div style={s.cardMeta}>
-        <div className="skeleton" style={{ width: 80, height: 10 }} />
-        <div className="skeleton" style={{ width: 32, height: 10 }} />
+    <div style={{ display: "flex", gap: 16, padding: "20px 0", borderBottom: "1px solid var(--border)" }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <div className="skeleton" style={{ width: 64, height: 10 }} />
+          <div className="skeleton" style={{ width: 28, height: 10 }} />
+        </div>
+        <div className="skeleton" style={{ width: "88%", height: 20, marginBottom: 6 }} />
+        <div className="skeleton" style={{ width: "72%", height: 20, marginBottom: 12 }} />
+        <div className="skeleton" style={{ width: "100%", height: 13, marginBottom: 5 }} />
+        <div className="skeleton" style={{ width: "85%", height: 13, marginBottom: 5 }} />
+        <div className="skeleton" style={{ width: "60%", height: 13, marginBottom: 14 }} />
+        <div style={{ display: "flex", gap: 10 }}>
+          <div className="skeleton" style={{ width: 52, height: 10 }} />
+          <div className="skeleton" style={{ width: 44, height: 10 }} />
+        </div>
       </div>
-      <div className="skeleton" style={{ width: "75%", height: 18, marginTop: 4 }} />
-      <div className="skeleton" style={{ width: "100%", height: 14, marginTop: 8 }} />
-      <div className="skeleton" style={{ width: "90%", height: 14, marginTop: 6 }} />
-      <div className="skeleton" style={{ width: "60%", height: 14, marginTop: 6 }} />
-      <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-        <div className="skeleton" style={{ width: 56, height: 20, borderRadius: 20 }} />
-        <div className="skeleton" style={{ width: 64, height: 20, borderRadius: 20 }} />
-      </div>
+      <div className="skeleton" style={{ width: 88, height: 60, borderRadius: 6, flexShrink: 0 }} />
     </div>
   );
 }
@@ -549,10 +553,7 @@ const s: Record<string, React.CSSProperties> = {
   feed: {
     maxWidth: 700,
     margin: "0 auto",
-    padding: "20px 16px 60px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
+    padding: "24px 20px 80px",
   },
   centerFull: {
     minHeight: "calc(100dvh - 56px)",
@@ -561,121 +562,114 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "center",
   },
 
-  // Card
+  // Article row — editorial, no card chrome
   card: {
-    background: "var(--bg-card)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius)",
-    padding: "16px 20px",
     display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    boxShadow: "var(--shadow-card)",
-    transition: "transform 200ms var(--ease), box-shadow 200ms var(--ease), border-color 200ms var(--ease)",
-    cursor: "default",
+    gap: 16,
+    alignItems: "flex-start",
+    padding: "20px 0",
+    borderBottom: "1px solid var(--border)",
   },
-  cardHovered: {
-    transform: "translateY(-2px)",
-    boxShadow: "var(--shadow-hover)",
-    borderColor: "var(--border-hover)",
-  },
-  cardImage: {
-    width: "100%",
-    height: 200,
+  cardThumb: {
+    width: 88,
+    height: 60,
     objectFit: "cover" as const,
-    borderRadius: "var(--radius-sm)",
-    marginBottom: 4,
+    borderRadius: 6,
+    flexShrink: 0,
+    opacity: 0.92,
   },
   cardMeta: {
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 2,
+    gap: 6,
+    marginBottom: 6,
   },
   source: {
     fontSize: 11,
-    fontWeight: 600,
+    fontWeight: 700,
     color: "var(--accent)",
     textTransform: "uppercase" as const,
     letterSpacing: "0.07em",
   },
+  metaSep: { fontSize: 11, color: "var(--text-subtle)" },
   time: { fontSize: 11, color: "var(--text-subtle)" },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: 650,
-    lineHeight: 1.35,
+    fontSize: 17,
+    fontWeight: 700,
+    lineHeight: 1.28,
     color: "var(--text)",
-    letterSpacing: "-0.01em",
+    letterSpacing: "-0.02em",
+    marginBottom: 6,
   },
   cardBody: {
     fontSize: 14,
     color: "var(--text-muted)",
     lineHeight: 1.65,
+    marginBottom: 10,
   },
-  topicsRow: { display: "flex", flexWrap: "wrap" as const, gap: 5, marginTop: 2 },
-  topicChip: {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
+  topicsRow: { display: "flex", flexWrap: "wrap" as const, gap: 10 },
+  topicTag: {
     fontSize: 11,
-    fontWeight: 500,
-    padding: "3px 9px 3px 7px",
-    borderRadius: 20,
-    background: "var(--bg-elevated)",
-    border: "1px solid transparent",
-    color: "var(--text-muted)",
+    fontWeight: 600,
+    letterSpacing: "0.04em",
+    opacity: 0.85,
   },
-  topicDot: { width: 5, height: 5, borderRadius: "50%", flexShrink: 0 },
   cardFooter: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 4,
+    gap: 12,
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
   },
   readMore: {
     display: "inline-flex",
     alignItems: "center",
     gap: 4,
     fontSize: 12,
-    fontWeight: 500,
-    color: "var(--text-muted)",
-    transition: "color 150ms ease",
+    fontWeight: 600,
+    color: "var(--accent)",
+    textDecoration: "none",
+    flexShrink: 0,
+    opacity: 0.9,
   },
-  reactionRow: { display: "flex", gap: 3 },
+  reactionRow: { display: "flex", gap: 1 },
   reactionBtn: {
     display: "inline-flex",
     alignItems: "center",
-    gap: 5,
-    padding: "5px 9px",
+    gap: 4,
+    padding: "4px 7px",
     background: "transparent",
-    border: "1px solid var(--border)",
+    border: "none",
     borderRadius: "var(--radius-xs)",
     color: "var(--text-subtle)",
     cursor: "pointer",
     fontSize: 12,
     fontWeight: 500,
-    transition: "color 150ms ease, border-color 150ms ease, background 150ms ease",
+    transition: "color 120ms ease, background 120ms ease",
   },
   reactionLike: {
     color: "var(--success)",
-    borderColor: "var(--success)",
     background: "var(--success-dim)",
   },
   reactionDislike: {
     color: "var(--danger)",
-    borderColor: "var(--danger)",
     background: "var(--danger-dim)",
   },
 
   // Feed meta
   guestBanner: {
-    background: "var(--bg-elevated)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-sm)",
-    padding: "12px 16px",
+    borderLeft: "2px solid var(--accent)",
+    paddingLeft: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
+    marginBottom: 4,
     fontSize: 13,
     color: "var(--text-muted)",
-    textAlign: "center" as const,
     lineHeight: 1.6,
   },
   empty: {
@@ -683,7 +677,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: "80px 20px",
     color: "var(--text-muted)",
     display: "flex",
-    flexDirection: "column",
+    flexDirection: "column" as const,
     alignItems: "center",
     gap: 8,
   },
@@ -692,19 +686,19 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
-    padding: "20px 0 8px",
+    gap: 16,
+    padding: "28px 0 8px",
   },
   pageBtn: {
-    padding: "8px 18px",
-    background: "var(--bg-card)",
+    padding: "7px 16px",
+    background: "transparent",
     border: "1px solid var(--border)",
     borderRadius: "var(--radius-sm)",
     color: "var(--text-muted)",
     cursor: "pointer",
     fontSize: 13,
     fontWeight: 500,
-    transition: "color 150ms ease, border-color 150ms ease",
+    transition: "border-color 150ms ease, color 150ms ease",
   },
   pageInfo: {
     color: "var(--text-subtle)",
@@ -729,7 +723,7 @@ const s: Record<string, React.CSSProperties> = {
     width: "100%",
     maxWidth: 360,
     display: "flex",
-    flexDirection: "column",
+    flexDirection: "column" as const,
     alignItems: "center",
     gap: 8,
     textAlign: "center" as const,
@@ -763,7 +757,7 @@ const s: Record<string, React.CSSProperties> = {
     marginTop: 4,
   },
   badgePro: { color: "var(--accent)", borderColor: "var(--accent)", background: "var(--accent-dim)" },
-  profileActions: { display: "flex", flexDirection: "column", gap: 8, width: "100%", marginTop: 16 },
+  profileActions: { display: "flex", flexDirection: "column" as const, gap: 8, width: "100%", marginTop: 16 },
   profileActionBtn: {
     display: "block",
     padding: "11px",
@@ -803,7 +797,7 @@ const s: Record<string, React.CSSProperties> = {
     width: "100%",
     maxWidth: "380px",
     display: "flex",
-    flexDirection: "column",
+    flexDirection: "column" as const,
     alignItems: "center",
     gap: "14px",
   },
@@ -843,7 +837,7 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
   },
-  form: { width: "100%", display: "flex", flexDirection: "column", gap: 8 },
+  form: { width: "100%", display: "flex", flexDirection: "column" as const, gap: 8 },
   inputWrap: { width: "100%" },
   input: {
     width: "100%",
