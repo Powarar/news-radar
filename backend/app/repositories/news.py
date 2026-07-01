@@ -61,13 +61,14 @@ class NewsRepository:
             excluded = await self.get_excluded_topics(user_id)
             topics_jsonb = cast(NewsItem.topics, JSONB)
 
-            # Hard exclusion: если пользователь поставил "Не читаю" для темы,
-            # скрываем все новости где эта тема есть — независимо от скора
+            # Hard exclusion: if user set "Не читаю" for a topic and it dominates
+            # the news (score > 0.5), hide it — even if another liked topic is present
             for topic in excluded:
                 stmt = stmt.where(
                     or_(
                         NewsItem.topics.is_(None),
                         ~topics_jsonb.has_key(topic),
+                        cast(topics_jsonb[topic].as_string(), Float) <= 0.5,
                     )
                 )
 
