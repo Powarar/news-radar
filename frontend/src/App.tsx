@@ -257,10 +257,12 @@ function FeedPage() {
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [errored, setErrored] = useState(false);
   const [sort, setSort] = useState<SortMode>("relevance");
 
   async function loadPage(p: number, sortMode: SortMode = sort) {
     setLoading(true);
+    setErrored(false);
     try {
       const r = await api.get<{ items: NewsItem[]; total: number }>(
         `/v1/news/?limit=${LIMIT}&offset=${p * LIMIT}&sort=${sortMode}`
@@ -269,6 +271,9 @@ function FeedPage() {
       setTotal(r.data.total);
       setPage(p);
       window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      console.error("Failed to load feed", err);
+      setErrored(true);
     } finally {
       setLoading(false);
     }
@@ -335,6 +340,24 @@ function FeedPage() {
 
         {loading ? (
           Array.from({ length: 5 }).map((_, i) => <CardSkeleton key={i} />)
+        ) : errored ? (
+          <div style={s.empty}>
+            <svg width="52" height="52" viewBox="0 0 52 52" fill="none" aria-hidden="true" style={{ color: "var(--danger)", marginBottom: 8 }}>
+              <circle cx="26" cy="26" r="20" stroke="currentColor" strokeWidth="2.5" opacity="0.3" />
+              <path d="M26 16v12M26 32v2" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+            <p style={{ fontWeight: 600, marginBottom: 6 }}>Не удалось загрузить ленту</p>
+            <button
+              onClick={() => loadPage(0)}
+              style={{
+                marginTop: 4, padding: "8px 20px", background: "var(--accent)",
+                border: "none", borderRadius: "var(--radius-sm)", color: "#fff",
+                fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              Повторить
+            </button>
+          </div>
         ) : items.length === 0 ? (
           <div style={s.empty}>
             <svg width="52" height="52" viewBox="0 0 52 52" fill="none" aria-hidden="true" style={{ color: "var(--text-subtle)", marginBottom: 8 }}>
