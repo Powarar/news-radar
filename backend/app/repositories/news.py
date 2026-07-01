@@ -1,14 +1,14 @@
 import json
 
 from sqlalchemy import Float, cast, desc, func, literal, or_, select, case
-
-TAU = 24  # часовой decay — через 24ч вес падает в exp(-1) ≈ 0.37 раза
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news import NewsItem, NewsReaction, ReactionType
 from app.models.source import Source
 from app.models.user import UserSourceSetting, UserTopicPreference
+
+TAU = 24  # часовой decay — через 24ч вес падает в exp(-1) ≈ 0.37 раза
 
 
 class NewsRepository:
