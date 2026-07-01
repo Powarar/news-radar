@@ -26,7 +26,8 @@ class NewsItem(Base):
 
     title: Mapped[str | None] = mapped_column(Text)
     body: Mapped[str] = mapped_column(Text)
-    summary: Mapped[str | None] = mapped_column(Text)       # HF summarization
+    summary: Mapped[str | None] = mapped_column(Text)       # AI summarization
+    ai_status: Mapped[str | None] = mapped_column(String(20))  # ok | failed | skipped
     url: Mapped[str | None] = mapped_column(String(512), unique=True)
     image_url: Mapped[str | None] = mapped_column(String(512))
 

@@ -1,6 +1,9 @@
 """
 Summarization via Groq API (llama-3.1-8b-instant).
-Returns None if Groq is unavailable — news is saved without summary.
+Returns (summary, status) where status is one of:
+  - "ok"      — summary generated
+  - "skipped" — no API key configured
+  - "failed"  — API error / network error / malformed response
 """
 
 import logging
@@ -30,9 +33,10 @@ def _get_client() -> httpx.Client:
     return _client
 
 
-def summarize(text: str) -> str | None:
+def summarize(text: str) -> tuple[str | None, str]:
+    """Return (summary, status). status ∈ {"ok", "skipped", "failed"}."""
     if not settings.groq_api_key:
-        return None
+        return None, "skipped"
 
     try:
         resp = _get_client().post(
@@ -51,9 +55,26 @@ def summarize(text: str) -> str | None:
                 "max_tokens": 200,
             },
         )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"].strip()
+        if resp.status_code != 200:
+            logger.warning(
+                "Groq summarize failed: HTTP %d | body=%.300s",
+                resp.status_code, resp.text[:300],
+            )
+            return None, "failed"
 
+        data = resp.json()
+        summary = data["choices"][0]["message"]["content"].strip()
+        if not summary:
+            logger.warning("Groq summarize: empty content | raw=%r", data)
+            return None, "failed"
+        return summary, "ok"
+
+    except httpx.HTTPError as e:
+        logger.warning("Groq summarize network error: %s", e)
+        return None, "failed"
+    except (KeyError, IndexError, ValueError) as e:
+        logger.warning("Groq summarize malformed response: %s", e)
+        return None, "failed"
     except Exception as e:
-        logger.warning("Groq summarize failed: %s", e)
-        return None
+        logger.warning("Groq summarize unexpected error: %s", e)
+        return None, "failed"

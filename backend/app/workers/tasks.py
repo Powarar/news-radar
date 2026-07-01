@@ -4,7 +4,7 @@ import logging
 from collections import defaultdict
 
 import httpx
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, or_, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -208,7 +208,12 @@ def fetch_website(source_id: int):
 # ─────────────────────────────────────────────────────────────
 
 
-@celery_app.task(name="app.workers.tasks.process_news_ai")
+@celery_app.task(
+    name="app.workers.tasks.process_news_ai",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=3,
+)
 def process_news_ai(news_id: int):
     """Classify topics and generate summary via Groq (keyword fallback if unavailable)."""
     with SyncSessionLocal() as session:
@@ -217,19 +222,56 @@ def process_news_ai(news_id: int):
             return
         text = (news.title or "") + " " + news.body
 
-        topics = classify(text)   # never raises — falls back to keywords
-        summary = summarize(text)  # returns None if unavailable
+        topics = classify(text)        # never raises — falls back to keywords
+        summary, status = summarize(text)  # (summary|None, "ok"|"skipped"|"failed")
 
         if not topics:
             logger.warning("No topics for news_id=%d | text=%.120s", news_id, text[:120])
 
         news.topics = json.dumps(topics) if topics else None
         news.summary = summary
+        news.ai_status = status
         news.importance_score = score_importance(topics)
         session.commit()
 
         if topics:
             send_notifications.delay(news_id)
+
+
+# ─────────────────────────────────────────────────────────────
+#  reprocess_news_ai — backfill: re-run AI on items missing summary
+# ─────────────────────────────────────────────────────────────
+
+@celery_app.task(name="app.workers.tasks.reprocess_news_ai")
+def reprocess_news_ai(batch_size: int = 100):
+    """
+    Find news items where summary IS NULL (or ai_status IS NULL / 'failed')
+    and re-dispatch process_news_ai for each. Use after seeding data,
+    Groq outages, or model upgrades.
+
+    Trigger manually:
+        celery -A app.workers.celery_app call app.workers.tasks.reprocess_news_ai
+    """
+    with SyncSessionLocal() as session:
+        rows = session.execute(
+            select(NewsItem.id)
+            .where(
+                or_(
+                    NewsItem.summary.is_(None),
+                    NewsItem.ai_status.is_(None),
+                    NewsItem.ai_status == "failed",
+                )
+            )
+            .order_by(NewsItem.id.desc())
+            .limit(batch_size)
+        ).scalars().all()
+
+        for news_id in rows:
+            process_news_ai.delay(news_id)
+
+        logger.info("reprocess_news_ai: dispatched %d items", len(rows))
+        return f"Dispatched {len(rows)} items for reprocessing"
+
 
 # ─────────────────────────────────────────────────────────────
 #  update_topic_preferences — обновляет веса топиков юзера
@@ -312,8 +354,8 @@ def send_notifications(news_item_id: int):
             f"{topic}: {score:.0%}" for topic, score in
             sorted(news_topics.items(), key=lambda x: x[1], reverse=True)[:3]
         )
-        # Show summary only for articles with a real title (TG body is already the title)
-        summary_line = f"\n\n{news.summary}" if news.summary and news.title else ""
+        # Show summary whenever it exists — TG posts use body as title, summary is still useful
+        summary_line = f"\n\n{news.summary}" if news.summary else ""
         url_line = f"\n\nПодробнее: {news.url}" if news.url else ""
         text = (
             f"<b>{title}</b>\n"

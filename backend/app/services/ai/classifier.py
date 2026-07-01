@@ -26,20 +26,32 @@ TOPICS = [
 _SYSTEM_PROMPT = """\
 You are a news topic classifier. Your response must be a single JSON object — nothing else. No explanation, no markdown, no code fences, no text before or after.
 
-Assign confidence scores (0.0–1.0) only to relevant topics from this list:
+Assign a confidence score (0.0–1.0) to EVERY topic that is even weakly related to the article. The scores drive a recommendation engine, so secondary and tertiary topics matter as much as the primary one — dropping them makes recommendations worse.
+
+Topic list:
 politics, military, technology, health, science, business, sports, culture, environment
 
+Scoring guide:
+- 0.9–1.0  : the article is primarily about this topic
+- 0.5–0.8  : the topic is a major secondary theme
+- 0.15–0.4 : the topic is mentioned or tangentially relevant (STILL INCLUDE IT)
+- < 0.15   : omit (truly unrelated only)
+
 Rules:
-- Omit topics with score <= 0.2
-- If no topic applies, return {}
+- Include every topic scoring >= 0.15. Do NOT drop weak-but-real signals.
+- A single article usually has 2–4 relevant topics. Rarely just one.
+- If genuinely no topic applies, return {}.
 - Output format: {"topic": score, ...}
 
 Examples:
 Input: "Apple releases new iPhone model with AI features"
-Output: {"technology": 0.95, "business": 0.6}
+Output: {"technology": 0.95, "business": 0.7, "science": 0.2}
 
-Input: "President signs new trade agreement"
-Output: {"politics": 0.9, "business": 0.5}"""
+Input: "President signs new trade agreement with implications for tech sector"
+Output: {"politics": 0.9, "business": 0.6, "technology": 0.25}
+
+Input: "New study links air pollution to respiratory disease"
+Output: {"health": 0.9, "environment": 0.6, "science": 0.4}"""
 
 _client: httpx.Client | None = None
 
@@ -72,7 +84,7 @@ def classify(text: str) -> dict[str, float]:
                     {"role": "user", "content": text[:_MAX_CHARS]},
                 ],
                 "temperature": 0,
-                "max_tokens": 100,
+                "max_tokens": 150,
             },
         )
         resp.raise_for_status()
@@ -87,13 +99,32 @@ def classify(text: str) -> dict[str, float]:
             )
             return classify_keywords(text)
 
-        result = json.loads(match.group())
-        filtered = {k: float(v) for k, v in result.items() if k in TOPICS}
+        try:
+            result = json.loads(match.group())
+        except json.JSONDecodeError as e:
+            logger.warning(
+                "Groq classify: invalid JSON %s | raw=%r | text=%.120s",
+                e, content[:300], text[:120],
+            )
+            return classify_keywords(text)
+
+        filtered: dict[str, float] = {}
+        for k, v in result.items():
+            if k not in TOPICS:
+                continue
+            try:
+                score = float(v)
+            except (TypeError, ValueError):
+                continue
+            if score >= 0.15:
+                filtered[k] = score
+
         if not filtered:
             logger.warning(
-                "Groq classify: returned 0 valid topics | raw=%r | text=%.120s",
+                "Groq classify: 0 valid topics, keyword fallback | raw=%r | text=%.120s",
                 content[:300], text[:120],
             )
+            return classify_keywords(text)
         return filtered
 
     except Exception as e:
