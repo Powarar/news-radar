@@ -153,20 +153,22 @@ class TestRelevanceSort:
         assert ids == [tech_news.id, sports_news.id]
 
     async def test_topic_exclusion(self, client: AsyncClient, db_session: AsyncSession):
-        """News with an excluded topic (weight=0) scoring >0.5 should be hidden."""
+        """News with an excluded topic (weight=0) should be hidden at any score."""
         user = await make_user(db_session)
         db_session.add(UserTopicPreference(user_id=user.id, topic="technology", weight=0.0))
         db_session.add(UserTopicPreference(user_id=user.id, topic="sports", weight=0.8))
         await db_session.commit()
 
         src = await make_source(db_session)
-        excluded = await make_news(db_session, src.id, topics={"technology": 0.9, "sports": 0.1})
-        allowed = await make_news(db_session, src.id, topics={"technology": 0.3, "sports": 0.9})
+        high = await make_news(db_session, src.id, topics={"technology": 0.9, "sports": 0.1})
+        low = await make_news(db_session, src.id, topics={"technology": 0.3, "sports": 0.9})
+        clean = await make_news(db_session, src.id, topics={"sports": 0.9})
 
         r = await client.get(f"{BASE}/?sort=relevance", headers=auth_headers(user))
         ids = [i["id"] for i in r.json()["items"]]
-        assert excluded.id not in ids
-        assert allowed.id in ids
+        assert high.id not in ids   # excluded topic присутствует
+        assert low.id not in ids    # excluded topic присутствует даже с низким скором
+        assert clean.id in ids      # только любимая тема — показываем
 
     async def test_source_blacklist(self, client: AsyncClient, db_session: AsyncSession):
         """Blacklisted sources should be excluded from feed."""

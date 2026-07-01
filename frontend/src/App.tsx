@@ -283,7 +283,10 @@ function FeedPage() {
 
   // Guests can't use personalization — switch default chip to "date" after load
   useEffect(() => {
-    if (!userLoading && !user && sort === "relevance") setSort("date");
+    if (!userLoading && !user && sort === "relevance") {
+      setSort("date");
+      loadPage(0, "date");
+    }
   }, [userLoading, user, sort]);
 
   async function handleReact(newsId: number, reaction: string) {
@@ -342,7 +345,7 @@ function FeedPage() {
             </svg>
             <p style={{ fontWeight: 600, marginBottom: 6 }}>Новостей пока нет</p>
             <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
-              Запустите парсинг через Celery worker
+              Добавьте источники на странице <Link to="/sources" style={{ color: "var(--accent)", textDecoration: "underline" }}>Источники</Link> — новости начнут подгружаться автоматически
             </p>
           </div>
         ) : (
