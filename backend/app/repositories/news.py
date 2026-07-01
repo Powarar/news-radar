@@ -8,8 +8,6 @@ from app.models.news import NewsItem, NewsReaction, ReactionType
 from app.models.source import Source
 from app.models.user import UserSourceSetting, UserTopicPreference
 
-TAU = 24  # часовой decay — через 24ч вес падает в exp(-1) ≈ 0.37 раза
-
 
 class NewsRepository:
     def __init__(self, db: AsyncSession):
@@ -86,11 +84,10 @@ class NewsRepository:
                 stmt = stmt.where(
                     or_(NewsItem.topics.is_(None), relevance > 0.05)
                 )
-                # soft decay: старые новости плавно теряют вес, а не отсекаются днём
-                age_seconds = func.extract("epoch", func.now() - date_sort)
-                decay = func.exp(-(age_seconds / 3600) / TAU)
-                scored = relevance * decay
-                order_by = [desc(scored), desc(date_sort)]
+                # Приоритет по темам пользователя, дата — только тай-брейк
+                # (не блендим decay в score, иначе свежая но нерелевантная
+                # новость может обогнать старую но более релевантную)
+                order_by = [desc(relevance), desc(date_sort)]
             else:
                 order_by = [desc(date_sort)]
         else:  # "date" or "relevance" without user

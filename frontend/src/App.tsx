@@ -257,6 +257,7 @@ function FeedPage() {
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [sort, setSort] = useState<SortMode>("relevance");
 
   async function loadPage(p: number, sortMode: SortMode = sort) {
@@ -268,9 +269,11 @@ function FeedPage() {
       setItems(r.data.items);
       setTotal(r.data.total);
       setPage(p);
+      setLoadError(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       console.error("Failed to load feed", err);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -337,6 +340,14 @@ function FeedPage() {
 
         {loading ? (
           Array.from({ length: 5 }).map((_, i) => <CardSkeleton key={i} />)
+        ) : loadError ? (
+          <div style={s.empty}>
+            <p style={{ fontWeight: 600, marginBottom: 6 }}>Не удалось загрузить ленту</p>
+            <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 14 }}>
+              Проблема на сервере или с сетью — попробуйте ещё раз
+            </p>
+            <button style={s.retryBtn} onClick={() => loadPage(page, sort)}>Повторить</button>
+          </div>
         ) : items.length === 0 ? (
           <div style={s.empty}>
             <svg width="52" height="52" viewBox="0 0 52 52" fill="none" aria-hidden="true" style={{ color: "var(--text-subtle)", marginBottom: 8 }}>
@@ -749,6 +760,16 @@ const s: Record<string, React.CSSProperties> = {
     gap: 8,
   },
   emptyIcon: { fontSize: 40, marginBottom: 8 },
+  retryBtn: {
+    padding: "8px 18px",
+    background: "var(--accent)",
+    border: "none",
+    borderRadius: "var(--radius-sm)",
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+  },
   pagination: {
     display: "flex",
     alignItems: "center",
