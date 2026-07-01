@@ -5,6 +5,7 @@ import { User, NewsItem } from "./types";
 import NavBar from "./components/NavBar";
 import PreferencesPage from "./components/PreferencesPage";
 import SourcesPage from "./components/SourcesPage";
+import { TOPIC_LABELS, TOPIC_COLORS } from "./constants";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ function IconExternalLink({ size = 13 }: { size?: number }) {
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 function useTelegramWebApp() {
+  const navigate = useNavigate();
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     if (!tg?.initData || localStorage.getItem("access_token")) return;
@@ -51,10 +53,10 @@ function useTelegramWebApp() {
       .then((r: { data: { access_token: string; refresh_token: string } }) => {
         localStorage.setItem("access_token", r.data.access_token);
         localStorage.setItem("refresh_token", r.data.refresh_token);
-        window.location.replace("/feed");
+        navigate("/feed", { replace: true });
       })
-      .catch(() => {});
-  }, []);
+      .catch((err) => console.error("Telegram auth failed", err));
+  }, [navigate]);
 }
 
 function useUser() {
@@ -65,25 +67,11 @@ function useUser() {
     if (!token) { setLoading(false); return; }
     api.get<User>("/v1/users/me")
       .then((r) => setUser(r.data))
-      .catch(() => {})
+      .catch((err) => console.error("Failed to fetch user", err))
       .finally(() => setLoading(false));
   }, []);
   return { user, loading };
 }
-
-// ─── Topic labels ─────────────────────────────────────────────────────────────
-
-const TOPIC_LABELS: Record<string, string> = {
-  politics: "политика", military: "военное", technology: "технологии",
-  health: "здоровье", science: "наука", business: "бизнес",
-  sports: "спорт", culture: "культура", environment: "экология",
-};
-
-const TOPIC_COLORS: Record<string, string> = {
-  politics: "#e05252", military: "#c0392b", technology: "#5b8dee",
-  health: "#4caf7d", science: "#9b59b6", business: "#e79b47",
-  sports: "#1abc9c", culture: "#f39c12", environment: "#27ae60",
-};
 
 // ─── NewsCard ─────────────────────────────────────────────────────────────────
 
@@ -99,7 +87,10 @@ function NewsCard({ item, user, onReact, enterDelay = 0 }: {
   const [loading, setLoading] = useState(false);
 
   function timeAgo(iso: string) {
-    const diff = Date.now() - new Date(iso).getTime();
+    const ms = new Date(iso).getTime();
+    if (Number.isNaN(ms)) return "";
+    const diff = Date.now() - ms;
+    if (diff < 0) return "только что";
     const min = Math.floor(diff / 60_000);
     if (min < 1) return "только что";
     if (min < 60) return `${min} мин`;
@@ -135,8 +126,8 @@ function NewsCard({ item, user, onReact, enterDelay = 0 }: {
   const text = item.summary ?? (item.body.length > 240 ? item.body.slice(0, 240) + "…" : item.body);
   const topTopics = Object.entries(item.topics)
     .sort(([, a], [, b]) => b - a)
-    .slice(0, 3)
-    .filter(([, score]) => score > 0.15);
+    .filter(([, score]) => score > 0.15)
+    .slice(0, 3);
 
   return (
     <article
@@ -293,13 +284,13 @@ function FeedPage() {
   // Guests can't use personalization — switch default chip to "date" after load
   useEffect(() => {
     if (!userLoading && !user && sort === "relevance") setSort("date");
-  }, [userLoading, user]);
+  }, [userLoading, user, sort]);
 
   async function handleReact(newsId: number, reaction: string) {
     const r = await api.post<{ likes: number; dislikes: number }>(`/v1/news/${newsId}/react`, { reaction });
     if (reaction === "blacklist") {
       const sourceId = items.find(x => x.id === newsId)?.source.id;
-      setItems(prev => prev.filter(i => i.source.id !== sourceId));
+      if (sourceId) setItems(prev => prev.filter(i => i.source.id !== sourceId));
     } else {
       setItems(prev => prev.map(i => {
         if (i.id !== newsId) return i;
@@ -324,6 +315,7 @@ function FeedPage() {
             return (
               <button
                 key={opt.value}
+                disabled={disabled || undefined}
                 style={{
                   ...s.sortChip,
                   ...(sort === opt.value ? s.sortChipActive : {}),
@@ -474,8 +466,14 @@ function LoginPage() {
         saveTokens(r.data);
       }
     } catch (err: any) {
-      const msg = err.response?.data?.detail;
-      setError(Array.isArray(msg) ? msg[0]?.msg : (msg ?? "Что-то пошло не так"));
+      const detail = err.response?.data?.detail;
+      let errorMsg = "Что-то пошло не так";
+      if (typeof detail === "string") {
+        errorMsg = detail;
+      } else if (Array.isArray(detail) && typeof detail[0] === "object" && detail[0]?.msg) {
+        errorMsg = detail[0].msg;
+      }
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -569,7 +567,6 @@ function OAuthCallback() {
     const params = new URLSearchParams(location.search);
     const code = params.get("code");
     if (!code) { navigate("/login", { replace: true }); return; }
-    window.history.replaceState({}, "", "/oauth/callback");
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     api.post<{ access_token: string; refresh_token: string }>("/v1/auth/exchange", { code })
@@ -579,7 +576,7 @@ function OAuthCallback() {
         navigate("/feed", { replace: true });
       })
       .catch(() => navigate("/login", { replace: true }));
-  }, []);
+  }, [navigate, location.search]);
   return <div style={s.centerFull}><div className="skeleton" style={{ width: 160, height: 20 }} /></div>;
 }
 

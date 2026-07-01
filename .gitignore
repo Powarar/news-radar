@@ -37,3 +37,10 @@ Thumbs.db
 
 #etc
 *.creds
+
+# Coverage
+.coverage
+htmlcov/
+
+# AI agent
+.commandcode/

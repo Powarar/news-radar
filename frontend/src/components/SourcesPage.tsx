@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import NavBar from "./NavBar";
 
@@ -93,6 +93,7 @@ export default function SourcesPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const messageTimer = useRef<ReturnType<typeof setTimeout>>();
 
   async function load() {
     setLoading(true);
@@ -119,7 +120,7 @@ export default function SourcesPage() {
     );
   });
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); return () => clearTimeout(messageTimer.current); }, []);
 
   async function toggle(sourceId: number) {
     try {
@@ -142,7 +143,8 @@ export default function SourcesPage() {
 
   function flash(type: "success" | "error", text: string) {
     setMessage({ type, text });
-    setTimeout(() => setMessage(null), 3000);
+    clearTimeout(messageTimer.current);
+    messageTimer.current = setTimeout(() => setMessage(null), 3000);
   }
 
   async function addSource(e: React.FormEvent) {
@@ -150,7 +152,7 @@ export default function SourcesPage() {
     setAdding(true);
     setMessage(null);
     try {
-      await api.post("/v1/sources/", {
+      const r = await api.post("/v1/sources/", {
         name: form.name,
         url: form.url,
         type: form.type,
@@ -160,7 +162,7 @@ export default function SourcesPage() {
       });
       setShowAdd(false);
       setForm({ name: "", url: "", type: "telegram", language: "ru", country: "", topics: "" });
-      await load();
+      setSources((prev) => [...prev, r.data]);
       flash("success", "Источник добавлен");
     } catch {
       flash("error", "Не удалось добавить источник");

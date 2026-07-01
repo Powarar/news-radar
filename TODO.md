@@ -1,6 +1,6 @@
 # TODO — News Radar
 
-## Семантический поиск (~5–7 вечеров)
+## Семантический поиск
 
 Юзер пишет "что происходит с ИИ в Китае" → находит релевантные новости даже без этих слов. Векторный поиск по embeddings.
 
@@ -44,34 +44,36 @@
 
 ## AI / Контент
 
-- [ ] Найти модель суммаризации которая не обрывает текст на полуслове (текущая `mT5_multilingual_XLSum` обрезает) — смотреть в сторону `facebook/bart-large-cnn` или `google/pegasus-xsum`
-- [ ] Генерация заголовка если у новости нет title — отдельная HF-модель или prompt к суммаризатору
+- [ ] Найти модель суммаризации которая не обрывает текст на полуслове (сейчас Groq, но может обрывать)
+- [ ] Генерация заголовка если у новости нет title
 - [ ] Добавить больше источников — RSS и Telegram каналы на ru/en
 
+---
 
 ## DevOps и деплой
 
-- [ ] GitHub Actions — build + push Docker образов, SSH деплой на сервер при пуше в `main`
-- [ ] Healthcheck в `docker-compose.prod.yml` (endpoint `/api/health` уже есть)
+- [ ] ~~GitHub Actions~~ ✅ есть — lint + test + deploy на main
+- [ ] ~~Healthcheck~~ ✅ уже есть — endpoint + docker-compose
+- [ ] ~~Flower~~ ✅ есть — localhost:5555
 - [ ] SSL в nginx — Let's Encrypt / Certbot
-- [ ] Flower — UI мониторинга Celery очередей
 - [ ] Бэкапы PostgreSQL — pg_dump по крону
+- [ ] Multi-stage Dockerfile — уменьшить размер образа бэкенда
 
 ---
 
 ## Качество кода
 
-- [ ] Тесты — pytest + httpx для auth endpoints
-- [ ] Celery retry — `autoretry_for=(Exception,), retry_backoff=True` на задачах парсинга
-- [ ] Глобальные exception handlers вместо try/except в каждом роуте
-- [ ] Multi-stage Dockerfile — уменьшить размер образа бэкенда
+- [ ] ~~Тесты~~ ✅ есть — pytest + httpx для auth endpoints (CI проверяет)
+- [ ] Celery retry — `autoretry_for=(Exception,), retry_backoff=True` на задачах **парсинга** (сейчас только на `process_news_ai` и `send_single_notification`)
+- [ ] Глобальные exception handlers — сейчас только `LookupError`, нужно покрыть остальные
+- [ ] ~~Sources API~~ ✅ готово — полный CRUD, не заглушка
 
 ---
 
 ## Безопасность
 
-- [ ] `refresh_token` — хранить в `httpOnly cookie` вместо `localStorage`
-- [ ] Secrets management — убрать `.env.prod` из репо, хранить в GitHub Secrets
+- [ ] `refresh_token` — хранить в `httpOnly cookie` вместо `localStorage` (сейчас в localStorage)
+- [ ] Secrets management — убрать `.env.prod` из репо (уже закоммичен), хранить в GitHub Secrets
 
 ---
 
@@ -105,3 +107,17 @@
 - [ ] Тема оформления — светлая / тёмная / системная
 - [ ] Шрифт — размер (S / M / L) и семейство (serif / sans-serif)
 - [ ] Язык интерфейса — ru / en (i18n)
+
+---
+
+## Когда-нибудь
+
+### Production readiness
+- [ ] Multi-stage Dockerfile — уменьшить размер образа
+- [ ] Структурированное логирование — loguru / structlog вместо print
+
+### Новые фичи
+- [ ] Deduplication новостей — один ивент от разных источников, группировка по URL + fuzzy match заголовка
+- [ ] Digest (дайджест) — топ-N новостей за день/неделю в Telegram или на почту
+- [ ] Read later — сохранить статью, отдельная вкладка во фронте
+- [ ] Cursor-based пагинация — вместо OFFSET для relevance сортировки

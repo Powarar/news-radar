@@ -1,31 +1,9 @@
-import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { PreferencesResponse } from "../types";
 import NavBar from "./NavBar";
-
-const VALID_TOPICS = [
-  "politics", "military", "technology", "health",
-  "science", "business", "sports", "culture", "environment",
-] as const;
-
-const TOPIC_LABELS: Record<string, string> = {
-  politics: "Политика",
-  military: "Военное дело",
-  technology: "Технологии",
-  health: "Здоровье",
-  science: "Наука",
-  business: "Бизнес",
-  sports: "Спорт",
-  culture: "Культура",
-  environment: "Экология",
-};
-
-const TOPIC_COLORS: Record<string, string> = {
-  politics: "#e05252", military: "#c0392b", technology: "#5b8dee",
-  health: "#4caf7d", science: "#9b59b6", business: "#e79b47",
-  sports: "#1abc9c", culture: "#f39c12", environment: "#27ae60",
-};
+import { VALID_TOPICS, TOPIC_LABELS, TOPIC_COLORS } from "../constants";
 
 // 4 survey levels → weight values
 const LEVELS = [
@@ -71,6 +49,7 @@ export default function PreferencesPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(false);
+  const savedTimer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     api
@@ -78,7 +57,7 @@ export default function PreferencesPage() {
       .then((r) => {
         const map = Object.fromEntries(VALID_TOPICS.map((t) => [t, 0]));
         for (const p of r.data.preferences) {
-          if (VALID_TOPICS.includes(p.topic as any)) {
+          if ((VALID_TOPICS as readonly string[]).includes(p.topic)) {
             map[p.topic] = weightToLevel(p.weight);
           }
         }
@@ -86,6 +65,7 @@ export default function PreferencesPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    return () => clearTimeout(savedTimer.current);
   }, []);
 
   async function save() {
@@ -100,7 +80,8 @@ export default function PreferencesPage() {
         })),
       });
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      clearTimeout(savedTimer.current);
+      savedTimer.current = setTimeout(() => setSaved(false), 3000);
     } catch {
       setError(true);
     } finally {

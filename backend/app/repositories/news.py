@@ -1,6 +1,8 @@
 import json
 
 from sqlalchemy import Float, cast, desc, func, literal, or_, select, case
+
+TAU = 24  # часовой decay — через 24ч вес падает в exp(-1) ≈ 0.37 раза
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,8 +87,11 @@ class NewsRepository:
                 stmt = stmt.where(
                     or_(NewsItem.topics.is_(None), relevance > 0.05)
                 )
-                day_bucket = func.date_trunc("day", date_sort)
-                order_by = [desc(day_bucket), desc(date_sort), desc(relevance)]
+                # soft decay: старые новости плавно теряют вес, а не отсекаются днём
+                age_seconds = func.extract("epoch", func.now() - date_sort)
+                decay = func.exp(-(age_seconds / 3600) / TAU)
+                scored = relevance * decay
+                order_by = [desc(scored), desc(date_sort)]
             else:
                 order_by = [desc(date_sort)]
         else:  # "date" or "relevance" without user
