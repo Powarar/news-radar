@@ -223,7 +223,7 @@ def process_news_ai(news_id: int):
         text = (news.title or "") + " " + news.body
 
         topics = classify(text)        # never raises — falls back to keywords
-        summary, status = summarize(text)  # (summary|None, "ok"|"skipped"|"failed")
+        summary, status = summarize(text, news_id=news_id)  # (summary|None, "ok"|"skipped"|"failed")
 
         if not topics:
             logger.warning("No topics for news_id=%d | text=%.120s", news_id, text[:120])

@@ -8,6 +8,8 @@ import feedparser
 import httpx
 from bs4 import BeautifulSoup
 
+from app.core.text_utils import strip_emoji
+
 logger = logging.getLogger(__name__)
 
 USER_AGENTS = [
@@ -43,6 +45,7 @@ def fetch_rss(url: str) -> list[dict]:
         if "<" in body:
             body = BeautifulSoup(body, "html.parser").get_text(separator=" ", strip=True)
 
+        body = strip_emoji(body)
         if not body:
             continue
 
@@ -50,8 +53,12 @@ def fetch_rss(url: str) -> list[dict]:
         if hasattr(entry, "published_parsed") and entry.published_parsed:
             published_at = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc).isoformat()
 
+        title = getattr(entry, "title", None)
+        if title:
+            title = strip_emoji(title)
+
         results.append({
-            "title": getattr(entry, "title", None),
+            "title": title,
             "text": body,
             "url": getattr(entry, "link", None),
             "published_at": published_at,
@@ -95,6 +102,10 @@ def fetch_html(url: str) -> list[dict]:
 
         if not text or not link:
             continue
+
+        text = strip_emoji(text)
+        if title:
+            title = strip_emoji(title)
 
         if link.startswith("/"):
             parsed = urlparse(url)

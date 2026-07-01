@@ -4,6 +4,8 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
+from app.core.text_utils import strip_emoji
+
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -51,6 +53,10 @@ def parse_channel(channel: str, limit: int = 20) -> list[dict]:
         url  = link_el.get("href") if link_el else None
 
         if not text or not url:
+            continue
+
+        text = strip_emoji(text)
+        if not text:
             continue
 
         published_at = None
