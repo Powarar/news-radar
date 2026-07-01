@@ -91,6 +91,8 @@ export default function SourcesPage() {
   const [form, setForm] = useState({ name: "", url: "", type: "telegram", language: "ru", country: "", topics: "" });
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
 
   async function load() {
     setLoading(true);
@@ -103,6 +105,19 @@ export default function SourcesPage() {
       setLoading(false);
     }
   }
+
+  const filtered = sources.filter((src) => {
+    if (typeFilter !== "all" && src.type !== typeFilter) return false;
+    if (!query.trim()) return true;
+    const q = query.trim().toLowerCase();
+    return (
+      src.name.toLowerCase().includes(q) ||
+      src.url.toLowerCase().includes(q) ||
+      src.language.toLowerCase().includes(q) ||
+      (src.country ?? "").toLowerCase().includes(q) ||
+      (src.topics ?? []).some((t) => t.toLowerCase().includes(q))
+    );
+  });
 
   useEffect(() => { load(); }, []);
 
@@ -175,6 +190,26 @@ export default function SourcesPage() {
           </div>
         )}
 
+        <div style={s.searchRow}>
+          <input
+            style={s.searchInput}
+            type="search"
+            placeholder="Поиск по названию, URL, теме, языку…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <select
+            style={s.typeSelect}
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="all">Все типы</option>
+            <option value="telegram">Telegram</option>
+            <option value="website">Сайт</option>
+            <option value="rss">RSS</option>
+          </select>
+        </div>
+
         {showAdd && (
           <form onSubmit={addSource} style={s.addForm}>
             <input style={s.input} type="text" placeholder="Название (например, Медуза)"
@@ -211,7 +246,15 @@ export default function SourcesPage() {
                   <p style={{ color: "var(--text-muted)", fontSize: 13 }}>Добавьте первый источник новостей</p>
                 </div>
               )
-              : sources.map((src) => (
+              : filtered.length === 0
+                ? (
+                  <div style={s.empty}>
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>🔍</div>
+                    <p style={{ fontWeight: 600, marginBottom: 4 }}>Ничего не найдено</p>
+                    <p style={{ color: "var(--text-muted)", fontSize: 13 }}>Попробуйте изменить запрос или фильтр</p>
+                  </div>
+                )
+                : filtered.map((src) => (
                 <div key={src.id} style={{ ...s.card, ...(src.blacklisted ? s.cardBlacklisted : {}) }}>
                   <div style={s.cardHeader}>
                     <span style={s.cardName}>{src.name}</span>
@@ -298,6 +341,32 @@ const s: Record<string, CSSProperties> = {
     fontSize: 14,
     marginBottom: 24,
     lineHeight: 1.6,
+  },
+  searchRow: {
+    display: "flex",
+    gap: 8,
+    marginBottom: 16,
+  },
+  searchInput: {
+    flex: 1,
+    padding: "10px 12px",
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text)",
+    fontSize: 14,
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  typeSelect: {
+    padding: "10px 12px",
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text)",
+    fontSize: 14,
+    outline: "none",
+    cursor: "pointer",
   },
   successMsg: {
     marginBottom: 16,
