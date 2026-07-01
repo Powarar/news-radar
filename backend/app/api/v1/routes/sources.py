@@ -47,7 +47,7 @@ async def add_source(
         "id": source.id,
         "name": source.name,
         "url": source.url,
-        "type": source.type.value,
+        "type": source.type.value if hasattr(source.type, "value") else source.type,
         "language": source.language,
         "country": source.country,
         "topics": json.loads(source.topics) if source.topics else None,
