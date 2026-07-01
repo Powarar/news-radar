@@ -284,7 +284,9 @@ function FeedPage() {
     loadPage(0, mode);
   }
 
-  useEffect(() => { loadPage(0); }, []);
+  useEffect(() => {
+    if (!userLoading) loadPage(0);
+  }, [userLoading]);
 
   // Guests can't use personalization — switch default chip to "date" after load
   useEffect(() => {
