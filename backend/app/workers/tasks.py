@@ -12,9 +12,8 @@ from app.models.news import NewsItem  # noqa: F401
 from app.models.source import Source, SourceType
 from app.models.user import User, UserTopicPreference  # noqa: F401
 from app.workers.celery_app import celery_app
-from app.services.ai.classifier import classify
+from app.services.ai.pipeline import process as ai_process
 from app.services.ai.importance import score_importance
-from app.services.ai.summarizer import summarize
 
 logger = logging.getLogger(__name__)
 
@@ -214,15 +213,14 @@ def fetch_website(source_id: int):
     max_retries=3,
 )
 def process_news_ai(news_id: int):
-    """Classify topics and generate summary via Groq (keyword fallback if unavailable)."""
+    """Classify topics and generate summary in one Groq call (keyword fallback if unavailable)."""
     with SyncSessionLocal() as session:
         news = session.scalar(select(NewsItem).where(NewsItem.id == news_id))
         if not news:
             return
         text = (news.title or "") + " " + news.body
 
-        topics = classify(text)        # never raises — falls back to keywords
-        summary, status = summarize(text, news_id=news_id)  # (summary|None, "ok"|"skipped"|"failed")
+        topics, summary, status = ai_process(text, news_id=news_id)
 
         if not topics:
             logger.warning("No topics for news_id=%d | text=%.120s", news_id, text[:120])
