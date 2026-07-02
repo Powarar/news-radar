@@ -1,7 +1,6 @@
 import json
 
-from sqlalchemy import Float, cast, desc, func, literal, or_, select, case
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Float, cast, desc, func, literal, not_, or_, select, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news import NewsItem, NewsReaction, ReactionType
@@ -52,28 +51,27 @@ class NewsRepository:
             )
             stmt = stmt.where(NewsItem.source_id.not_in(blacklisted_sq))
 
+        if user_id:
+            excluded = await self.get_excluded_topics(user_id)
+            if excluded:
+                for topic in excluded:
+                    stmt = stmt.where(
+                        or_(
+                            NewsItem.topics.is_(None),
+                            not_(NewsItem.topics.has_key(topic)),
+                        )
+                    )
+
         if sort_by == "importance":
             order_by = [desc(func.coalesce(NewsItem.importance_score, 0.0)), desc(date_sort)]
         elif sort_by == "relevance" and user_id:
             prefs = await self.get_user_preferences(user_id)
-            excluded = await self.get_excluded_topics(user_id)
-            topics_jsonb = cast(NewsItem.topics, JSONB)
-
-            # Hard exclusion: если пользователь поставил "Не читаю" для темы,
-            # скрываем все новости где эта тема есть — независимо от скора
-            for topic in excluded:
-                stmt = stmt.where(
-                    or_(
-                        NewsItem.topics.is_(None),
-                        ~topics_jsonb.has_key(topic),
-                    )
-                )
 
             if prefs:
                 # relevance = Σ(user_weight × news_topic_score)
                 score_parts = [
                     case(
-                        (topics_jsonb.has_key(topic), weight * cast(topics_jsonb[topic].as_string(), Float)),
+                        (NewsItem.topics.has_key(topic), weight * cast(NewsItem.topics[topic].as_string(), Float)),
                         else_=literal(0.0),
                     )
                     for topic, weight in prefs.items()
@@ -202,7 +200,7 @@ class NewsRepository:
             "url": news.url,
             "image_url": news.image_url,
             "language": news.language,
-            "topics": json.loads(news.topics) if news.topics else {},
+            "topics": news.topics or {},
             "importance_score": news.importance_score,
             "published_at": news.published_at.isoformat() if news.published_at else None,
             "created_at": news.created_at.isoformat(),

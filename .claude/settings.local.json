@@ -23,7 +23,9 @@
       "Bash(Get-ChildItem -Path . -Name \".env*\" -Force)",
       "Bash(Get-ChildItem -Path backend -Name \"pytest.ini\")",
       "WebSearch",
-      "WebFetch(domain:pypi.org)"
+      "WebFetch(domain:pypi.org)",
+      "Bash(curl *)",
+      "Bash(python3 -m json.tool)"
     ]
   }
 }

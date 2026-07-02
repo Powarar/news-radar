@@ -1,4 +1,3 @@
-import json
 import logging
 
 from collections import defaultdict
@@ -228,10 +227,20 @@ def process_news_ai(news_id: int):
         if not topics:
             logger.warning("No topics for news_id=%d | text=%.120s", news_id, text[:120])
 
-        news.topics = json.dumps(topics) if topics else None
+        news.topics = topics if topics else None
         news.summary = summary
         news.ai_status = status
-        news.importance_score = score_importance(topics)
+
+        # Load recent classified news for percentile-based importance
+        recent = session.execute(
+            select(NewsItem.topics)
+            .where(NewsItem.topics.isnot(None), NewsItem.id != news_id)
+            .order_by(NewsItem.created_at.desc())
+            .limit(200)
+        ).scalars().all()
+        history = [r for r in recent if r]
+
+        news.importance_score = score_importance(topics, history)
         session.commit()
 
         if topics:
@@ -284,7 +293,7 @@ def update_topic_preferences(user_id: int, news_id: int, reaction: str):
         if not item or not item.topics:
             return
 
-        news_topics = json.loads(item.topics)  # {"politics": 0.9, "military": 0.6}
+        news_topics = item.topics  # {"politics": 0.9, "military": 0.6}
         delta = 0.1 if reaction == "like" else -0.1
 
         topics_to_update = [t for t, s in news_topics.items() if s >= 0.3]
@@ -324,7 +333,7 @@ def send_notifications(news_item_id: int):
             logger.info("Skipping notification for old news_id=%d", news_item_id)
             return
 
-        news_topics = json.loads(news.topics)
+        news_topics = news.topics
 
         if not settings.telegram_bot_token:
             logger.warning("TELEGRAM_BOT_TOKEN not set, skipping notifications")

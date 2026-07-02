@@ -3,6 +3,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Float, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -32,7 +33,7 @@ class NewsItem(Base):
     image_url: Mapped[str | None] = mapped_column(String(512))
 
     language: Mapped[str] = mapped_column(String(10), default="en", index=True)
-    topics: Mapped[str | None] = mapped_column(Text)         # JSON: {"politics": 0.9, "tech": 0.2}
+    topics: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # {"politics": 0.9, "tech": 0.2}
     importance_score: Mapped[float] = mapped_column(Float, default=0.0)  # 0.0 – 1.0
 
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
