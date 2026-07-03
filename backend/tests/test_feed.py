@@ -51,7 +51,7 @@ async def make_news(
         source_id=source_id,
         title=overrides.get("title", "Test News"),
         body=overrides.get("body", "Test body content for the news item."),
-        topics=json.dumps(overrides.get("topics", {"technology": 0.9})),
+        topics=overrides.get("topics", {"technology": 0.9}),
         importance_score=overrides.get("importance_score", 0.5),
         published_at=overrides.get("published_at", datetime.now(timezone.utc)),
         language=overrides.get("language", "ru"),
