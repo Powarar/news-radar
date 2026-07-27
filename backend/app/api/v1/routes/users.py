@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import CurrentUser
 from app.core.database import get_db
-from app.schemas.user import UserResponse, UserUpdate
 from app.repositories.user import UserRepository
+from app.schemas.user import UserResponse, UserUpdate
 
 router = APIRouter()
 

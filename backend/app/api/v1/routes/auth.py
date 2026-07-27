@@ -1,19 +1,24 @@
 from typing import Annotated
 
+from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
 
-from app.core.database import get_db
-from app.schemas.auth import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, OAuthCodeRequest
-from app.services.auth import AuthService
-from app.core.config import settings
-from app.core.rate_limit import RateLimiter
 from app.api.v1.deps import bearer
-
+from app.core.config import settings
+from app.core.database import get_db
+from app.core.rate_limit import RateLimiter
+from app.schemas.auth import (
+    LoginRequest,
+    OAuthCodeRequest,
+    RefreshRequest,
+    RegisterRequest,
+    TokenResponse,
+)
+from app.services.auth import AuthService
 
 router = APIRouter()
 

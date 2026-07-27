@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Float, cast, desc, func, literal, not_, or_, select, case
+from sqlalchemy import Float, case, cast, desc, func, literal, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news import NewsItem, NewsReaction, ReactionType

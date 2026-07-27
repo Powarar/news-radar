@@ -75,7 +75,7 @@ def verify_webapp_init_data(init_data: str) -> dict | None:
 
     try:
         return json.loads(params.get("user", "{}"))
-    except Exception:
+    except (json.JSONDecodeError, TypeError):
         return None
 
 

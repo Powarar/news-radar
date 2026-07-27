@@ -78,7 +78,7 @@ def fetch_html(url: str) -> list[dict]:
     try:
         r = _get_client().get(url, headers=headers)
         r.raise_for_status()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — a broken source must not stop the worker
         logger.warning("fetch_html failed for %s: %s", url, e)
         return []
 
@@ -140,7 +140,8 @@ def fetch_site(url: str) -> list[dict]:
             items = fetch_rss(rss_url)
             if items:
                 return items
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 — try the next candidate on any parser failure
+            logger.debug("RSS candidate failed for %s: %s", rss_url, exc)
             continue
 
     return fetch_html(url)

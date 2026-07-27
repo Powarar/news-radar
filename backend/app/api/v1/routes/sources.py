@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
 from app.api.v1.deps import CurrentUser, OptionalUser
+from app.core.database import get_db
 from app.repositories.sources import SourcesRepository
 from app.schemas.sources import SourceCreateRequest, SourceResponse
 

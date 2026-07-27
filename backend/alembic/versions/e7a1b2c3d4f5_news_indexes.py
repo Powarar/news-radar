@@ -5,15 +5,14 @@ Revises: edd510d0335a
 Create Date: 2026-05-16 00:00:00.000000
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
 
-
 revision: str = 'e7a1b2c3d4f5'
-down_revision: Union[str, None] = 'edd510d0335a'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = 'edd510d0335a'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

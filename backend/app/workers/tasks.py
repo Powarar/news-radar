@@ -1,5 +1,4 @@
 import logging
-
 from collections import defaultdict
 
 import httpx
@@ -8,12 +7,12 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
-from app.models.news import NewsItem  # noqa: F401
+from app.models.news import NewsItem
 from app.models.source import Source, SourceType
-from app.models.user import User, UserTopicPreference  # noqa: F401
-from app.workers.celery_app import celery_app
-from app.services.ai.pipeline import process as ai_process
+from app.models.user import User, UserTopicPreference
 from app.services.ai.importance import score_importance
+from app.services.ai.pipeline import process as ai_process
+from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +20,10 @@ engine = create_engine(settings.database_url_sync, poolclass=NullPool)
 SyncSessionLocal = sessionmaker(engine)
 
 _tg_client: httpx.Client | None = None
+
+
+class TelegramSendError(RuntimeError):
+    """Telegram Bot API rejected a notification."""
 
 
 def _get_tg_client() -> httpx.Client:
@@ -65,7 +68,7 @@ def _should_skip(source) -> bool:
     но у разных источников разный fetch_interval_minutes.
     Например канал который обновляется раз в час — не нужно парсить каждые 15 минут.
     """
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
     if source.last_fetched_at is None:
         return False
     interval = timedelta(minutes=source.fetch_interval_minutes)
@@ -83,6 +86,7 @@ def fetch_telegram_channel(source_id: int):
     Сохраняет только новые посты (проверяет по url).
     """
     from datetime import datetime, timezone
+
     from app.models.news import NewsItem
     from app.services.parser.telegram import parse_channel
 
@@ -151,6 +155,7 @@ def fetch_website(source_id: int):
     при неудаче — скрапит HTML страницу.
     """
     from datetime import datetime, timezone
+
     from app.models.news import NewsItem
     from app.services.parser.web import fetch_site
 
@@ -319,7 +324,7 @@ def update_topic_preferences(user_id: int, news_id: int, reaction: str):
 @celery_app.task(name="app.workers.tasks.send_notifications")
 def send_notifications(news_item_id: int):
     """Fan-out: find matched users and dispatch one task per user."""
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
 
     with SyncSessionLocal() as session:
         news = session.scalar(select(NewsItem).where(NewsItem.id == news_item_id))
@@ -427,7 +432,7 @@ def send_single_notification(telegram_id: str, text: str, news_item_id: int):
 
     if resp.status_code == 429:
         retry_after = resp.json().get("parameters", {}).get("retry_after", 10)
-        raise Exception(f"TG rate limit, retry after {retry_after}s")
+        raise TelegramSendError(f"TG rate limit, retry after {retry_after}s")
 
     if resp.status_code != 200:
-        raise Exception(f"TG sendMessage failed: {resp.status_code} {resp.text}")
+        raise TelegramSendError(f"TG sendMessage failed: {resp.status_code} {resp.text}")

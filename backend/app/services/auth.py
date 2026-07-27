@@ -1,10 +1,13 @@
-from datetime import datetime, timezone
 import json
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
+from jwt import InvalidTokenError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.core.redis import redis
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -14,10 +17,13 @@ from app.core.security import (
     verify_telegram_hash,
     verify_webapp_init_data,
 )
-from app.core.redis import redis
-from app.core.config import settings
 from app.repositories.user import UserRepository
-from app.schemas.auth import RegisterRequest, LoginRequest, RefreshRequest, TokenResponse
+from app.schemas.auth import (
+    LoginRequest,
+    RefreshRequest,
+    RegisterRequest,
+    TokenResponse,
+)
 
 
 class AuthService:
@@ -153,8 +159,11 @@ class AuthService:
     async def refresh(self, data: RefreshRequest) -> TokenResponse:
         try:
             payload = decode_token(data.refresh_token)
-        except Exception:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+        except InvalidTokenError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+            ) from exc
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
         return self._make_tokens(payload["sub"])
@@ -173,4 +182,3 @@ class AuthService:
 
         if ttl > 0:
             await redis.setex(f"blacklist:{token}", ttl, "1")
-        return

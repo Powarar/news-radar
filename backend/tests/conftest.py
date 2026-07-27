@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.core.database import Base, get_db
-from app.main import app  # noqa: F401 — импорт регистрирует все модели
+from app.main import app
 
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
