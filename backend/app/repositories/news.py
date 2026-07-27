@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import Float, cast, desc, func, literal, not_, or_, select, case
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.news import NewsItem, NewsReaction, ReactionType
 from app.models.source import Source
 from app.models.user import UserSourceSetting, UserTopicPreference
+
+PERSONALIZED_FEED_MAX_AGE = timedelta(days=3)
+PREFERENCE_SCORE_WEIGHT = 0.9
+FRESHNESS_SCORE_WEIGHT = 0.1
 
 
 class NewsRepository:
@@ -65,10 +70,14 @@ class NewsRepository:
         if sort_by == "importance":
             order_by = [desc(func.coalesce(NewsItem.importance_score, 0.0)), desc(date_sort)]
         elif sort_by == "relevance" and user_id:
+            now = datetime.now(timezone.utc)
+            cutoff = now - PERSONALIZED_FEED_MAX_AGE
+            stmt = stmt.where(date_sort >= cutoff)
             prefs = await self.get_user_preferences(user_id)
 
             if prefs:
-                # relevance = Σ(user_weight × news_topic_score)
+                # Normalize preference relevance to 0..1, then add a deliberately
+                # small freshness component. Preferences remain the main signal.
                 score_parts = [
                     case(
                         (NewsItem.topics.has_key(topic), weight * cast(NewsItem.topics[topic].as_string(), Float)),
@@ -79,13 +88,25 @@ class NewsRepository:
                 relevance = score_parts[0]
                 for part in score_parts[1:]:
                     relevance = relevance + part
-                stmt = stmt.where(
-                    or_(NewsItem.topics.is_(None), relevance > 0.05)
+
+                age_seconds = func.extract("epoch", literal(now) - date_sort)
+                freshness = func.greatest(
+                    literal(0.0),
+                    func.least(
+                        literal(1.0),
+                        literal(1.0) - age_seconds / PERSONALIZED_FEED_MAX_AGE.total_seconds(),
+                    ),
                 )
-                # Приоритет по темам пользователя, дата — только тай-брейк
-                # (не блендим decay в score, иначе свежая но нерелевантная
-                # новость может обогнать старую но более релевантную)
-                order_by = [desc(relevance), desc(date_sort)]
+                normalized_relevance = relevance / sum(prefs.values())
+                personalized_score = (
+                    normalized_relevance * PREFERENCE_SCORE_WEIGHT
+                    + freshness * FRESHNESS_SCORE_WEIGHT
+                )
+
+                stmt = stmt.where(
+                    or_(NewsItem.topics.is_(None), relevance > 0.05),
+                )
+                order_by = [desc(personalized_score), desc(date_sort)]
             else:
                 order_by = [desc(date_sort)]
         else:  # "date" or "relevance" without user

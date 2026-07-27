@@ -45,32 +45,58 @@ function IconExternalLink({ size = 13 }: { size?: number }) {
 
 function useTelegramWebApp() {
   const navigate = useNavigate();
+  const [ready, setReady] = useState(() => {
+    const tg = (window as any).Telegram?.WebApp;
+    return !tg?.initData || Boolean(localStorage.getItem("access_token"));
+  });
+
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
-    if (!tg?.initData || localStorage.getItem("access_token")) return;
+    if (!tg?.initData || localStorage.getItem("access_token")) {
+      setReady(true);
+      return;
+    }
     tg.ready();
     api.post("/v1/auth/telegram/webapp", { init_data: tg.initData })
       .then((r: { data: { access_token: string; refresh_token: string } }) => {
         localStorage.setItem("access_token", r.data.access_token);
         localStorage.setItem("refresh_token", r.data.refresh_token);
+        window.dispatchEvent(new Event("news-radar-auth-changed"));
         navigate("/feed", { replace: true });
       })
-      .catch((err) => console.error("Telegram auth failed", err));
+      .catch((err) => console.error("Telegram auth failed", err))
+      .finally(() => setReady(true));
   }, [navigate]);
+  return ready;
 }
 
 function useUser() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (!token) { setLoading(false); return; }
-    api.get<User>("/v1/users/me")
-      .then((r) => setUser(r.data))
-      .catch((err) => console.error("Failed to fetch user", err))
-      .finally(() => setLoading(false));
+    function loadUser() {
+      const token = localStorage.getItem("access_token");
+      if (!token) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      api.get<User>("/v1/users/me")
+        .then((r) => setUser(r.data))
+        .catch((err) => {
+          setUser(null);
+          console.error("Failed to fetch user", err);
+        })
+        .finally(() => setLoading(false));
+    }
+
+    loadUser();
+    window.addEventListener("news-radar-auth-changed", loadUser);
+    return () => window.removeEventListener("news-radar-auth-changed", loadUser);
   }, []);
-  return { user, loading };
+  return { user, loading, isAuthenticated: !loading && user !== null };
 }
 
 // ─── NewsCard ─────────────────────────────────────────────────────────────────
@@ -251,16 +277,21 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
 
 const LIMIT = 20;
 
-function FeedPage() {
-  const { user, loading: userLoading } = useUser();
+function FeedPage({ authReady }: { authReady: boolean }) {
+  const { user, loading: userLoading, isAuthenticated } = useUser();
   const [items, setItems] = useState<NewsItem[]>([]);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [sort, setSort] = useState<SortMode>("relevance");
 
   async function loadPage(p: number, sortMode: SortMode = sort) {
+    // Never send a "Для вас" request until /users/me has confirmed the session.
+    // Otherwise the optional backend auth correctly treats it as a guest request
+    // and returns the common date-sorted feed.
+    if (sortMode === "relevance" && !isAuthenticated) return;
+
     setLoading(true);
     try {
       const r = await api.get<{ items: NewsItem[]; total: number }>(
@@ -284,15 +315,18 @@ function FeedPage() {
     loadPage(0, mode);
   }
 
-  useEffect(() => { loadPage(0); }, []);
-
-  // Guests can't use personalization — switch default chip to "date" after load
   useEffect(() => {
-    if (!userLoading && !user && sort === "relevance") {
-      setSort("date");
-      loadPage(0, "date");
+    if (!authReady || userLoading) return;
+
+    if (isAuthenticated) {
+      setSort("relevance");
+      loadPage(0, "relevance");
+      return;
     }
-  }, [userLoading, user, sort]);
+
+    setSort("date");
+    loadPage(0, "date");
+  }, [authReady, userLoading, isAuthenticated, user?.id]);
 
   async function handleReact(newsId: number, reaction: string) {
     const r = await api.post<{ likes: number; dislikes: number }>(`/v1/news/${newsId}/react`, { reaction });
@@ -976,11 +1010,11 @@ const s: Record<string, React.CSSProperties> = {
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  useTelegramWebApp();
+  const authReady = useTelegramWebApp();
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/feed" replace />} />
-      <Route path="/feed" element={<FeedPage />} />
+      <Route path="/feed" element={<FeedPage authReady={authReady} />} />
       <Route path="/preferences" element={<PreferencesPage />} />
       <Route path="/sources" element={<SourcesPage />} />
       <Route path="/login" element={<LoginPage />} />

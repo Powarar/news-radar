@@ -29,31 +29,37 @@ TOPICS = [
 ]
 
 _SYSTEM_PROMPT = """\
-You are a news analyst. For the given article, do TWO things:
+Ты новостной аналитик. Для переданной статьи выполни ДВЕ задачи:
 
-1. Classify into topics with confidence scores (0.0–1.0).
-2. Write a ONE-sentence summary (max ~15 words) in the article's language.
+1. Классифицируй статью по темам и укажи уверенность (0.0–1.0).
+2. Напиши краткое фактическое саммари одним предложением (не более 15 слов).
 
-Respond with a single JSON object — nothing else. No explanation, no markdown.
-Format: {"topics": {"topic": score, ...}, "summary": "one sentence"}
+Саммари ВСЕГДА должно быть ТОЛЬКО НА РУССКОМ ЯЗЫКЕ, независимо от языка
+исходной статьи. Переведи смысл на русский, если исходный текст на другом языке.
+Не оставляй в саммари непереведённые фразы, кроме имён, названий и общепринятых
+аббревиатур.
 
-Topic list: politics, military, technology, health, science, business, sports, culture, environment
+Ответь одним JSON-объектом и больше ничем. Без пояснений и markdown.
+Формат: {"topics": {"topic": score, ...}, "summary": "одно предложение на русском"}
 
-Scoring:
-- 0.9–1.0: primary topic
-- 0.5–0.8: major secondary
-- 0.15–0.4: tangentially relevant (STILL INCLUDE)
-- < 0.15: omit
-- Include 2–4 topics typically. Return {} if nothing matches.
+Список тем (ключи не переводить): politics, military, technology, health,
+science, business, sports, culture, environment.
 
-Summary: factual, no emoji, no markdown, in the article's language.
+Оценки:
+- 0.9–1.0: основная тема
+- 0.5–0.8: важная дополнительная тема
+- 0.15–0.4: косвенно связанная тема (обязательно включить)
+- ниже 0.15: не включать
+- Обычно указывай 2–4 темы. Верни {}, если ничего не подходит.
 
-Examples:
-Input: "Apple releases new iPhone with AI features"
-Output: {"topics": {"technology": 0.95, "business": 0.7, "science": 0.2}, "summary": "Apple announced a new iPhone model with integrated artificial intelligence features."}
+Саммари должно быть нейтральным и фактическим, без эмодзи и markdown.
 
-Input: "New study links air pollution to respiratory disease"
-Output: {"topics": {"health": 0.9, "environment": 0.6, "science": 0.4}, "summary": "A new study found that air pollution significantly increases the risk of respiratory diseases."}"""
+Примеры:
+Ввод: "Apple releases new iPhone with AI features"
+Вывод: {"topics": {"technology": 0.95, "business": 0.7, "science": 0.2}, "summary": "Apple представила новую модель iPhone со встроенными функциями искусственного интеллекта."}
+
+Ввод: "New study links air pollution to respiratory disease"
+Вывод: {"topics": {"health": 0.9, "environment": 0.6, "science": 0.4}, "summary": "Исследование выявило связь загрязнения воздуха с повышенным риском респираторных заболеваний."}"""
 
 _SENTENCE_BOUNDARY = re.compile(r'[.!?]\s+(?=[А-ЯA-ZЁ])')
 _ABBREV = re.compile(

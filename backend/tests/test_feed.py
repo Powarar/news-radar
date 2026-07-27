@@ -183,14 +183,35 @@ class TestRelevanceSort:
 
     async def test_no_preferences_falls_back_to_date(self, client: AsyncClient, db_session: AsyncSession):
         """User with no preferences should get date-sorted feed."""
+        now = datetime.now(timezone.utc)
         user = await make_user(db_session)
         src = await make_source(db_session)
-        old = await make_news(db_session, src.id, published_at=datetime(2024, 1, 1, tzinfo=timezone.utc))
-        new = await make_news(db_session, src.id, published_at=datetime(2025, 6, 1, tzinfo=timezone.utc))
+        old = await make_news(db_session, src.id, published_at=now - timedelta(days=2))
+        new = await make_news(db_session, src.id, published_at=now)
 
         r = await client.get(f"{BASE}/?sort=relevance", headers=auth_headers(user))
         ids = [i["id"] for i in r.json()["items"]]
         assert ids == [new.id, old.id]
+
+    async def test_no_preferences_still_excludes_stale_news(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        now = datetime.now(timezone.utc)
+        user = await make_user(db_session)
+        src = await make_source(db_session)
+        recent = await make_news(db_session, src.id, published_at=now)
+        stale = await make_news(
+            db_session,
+            src.id,
+            published_at=now - timedelta(days=4),
+        )
+
+        r = await client.get(f"{BASE}/?sort=relevance", headers=auth_headers(user))
+        payload = r.json()
+        ids = [i["id"] for i in payload["items"]]
+        assert ids == [recent.id]
+        assert stale.id not in ids
+        assert payload["total"] == 1
 
     async def test_relevance_threshold(self, client: AsyncClient, db_session: AsyncSession):
         """News with relevance ≤ 0.05 should be filtered out."""
@@ -213,8 +234,8 @@ class TestRelevanceSort:
 # ─── Decay ─────────────────────────────────────────────────────────────────────
 
 
-class TestDecay:
-    """Soft decay should rank fresh news above old news with same relevance."""
+class TestPersonalizedFreshness:
+    """Personalized feed uses a small freshness bonus and a hard age cutoff."""
 
     async def test_fresh_news_beats_old_news_same_relevance(
         self, client: AsyncClient, db_session: AsyncSession
@@ -231,6 +252,61 @@ class TestDecay:
         r = await client.get(f"{BASE}/?sort=relevance", headers=auth_headers(user))
         ids = [i["id"] for i in r.json()["items"]]
         assert ids == [fresh.id, old.id]
+
+    async def test_preferences_outweigh_freshness(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        now = datetime.now(timezone.utc)
+        user = await make_user(db_session)
+        db_session.add(UserTopicPreference(user_id=user.id, topic="technology", weight=1.0))
+        await db_session.commit()
+
+        src = await make_source(db_session)
+        preferred = await make_news(
+            db_session,
+            src.id,
+            topics={"technology": 0.9},
+            published_at=now - timedelta(days=2),
+        )
+        merely_fresh = await make_news(
+            db_session,
+            src.id,
+            topics={"technology": 0.2},
+            published_at=now,
+        )
+
+        r = await client.get(f"{BASE}/?sort=relevance", headers=auth_headers(user))
+        ids = [i["id"] for i in r.json()["items"]]
+        assert ids == [preferred.id, merely_fresh.id]
+
+    async def test_news_older_than_three_days_is_excluded(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        now = datetime.now(timezone.utc)
+        user = await make_user(db_session)
+        db_session.add(UserTopicPreference(user_id=user.id, topic="technology", weight=1.0))
+        await db_session.commit()
+
+        src = await make_source(db_session)
+        recent = await make_news(
+            db_session,
+            src.id,
+            topics={"technology": 0.8},
+            published_at=now - timedelta(days=2, hours=23),
+        )
+        stale = await make_news(
+            db_session,
+            src.id,
+            topics={"technology": 1.0},
+            published_at=now - timedelta(days=3, minutes=1),
+        )
+
+        r = await client.get(f"{BASE}/?sort=relevance", headers=auth_headers(user))
+        payload = r.json()
+        ids = [i["id"] for i in payload["items"]]
+        assert recent.id in ids
+        assert stale.id not in ids
+        assert payload["total"] == 1
 
 
 # ─── Pagination ────────────────────────────────────────────────────────────────
