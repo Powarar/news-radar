@@ -235,12 +235,11 @@ def fetch_website(source_id: int):
 
 @celery_app.task(
     name="app.workers.tasks.process_news_ai",
-    autoretry_for=(Exception,),
-    retry_backoff=True,
+    bind=True,
     max_retries=3,
 )
-def process_news_ai(news_id: int, force: bool = False):
-    """Classify topics and generate summary in one Groq call (keyword fallback if unavailable)."""
+def process_news_ai(self, news_id: int, force: bool = False, notify: bool = True):
+    """Classify topics and generate a summary, retrying failed Groq runs."""
     with SyncSessionLocal() as session:
         # Late acknowledgement permits redelivery. Locking the row makes two
         # concurrent deliveries serialize; the second sees the committed status.
@@ -257,6 +256,20 @@ def process_news_ai(news_id: int, force: bool = False):
         text = (news.title or "") + " " + news.body
 
         topics, summary, status = ai_process(text, news_id=news_id)
+
+        # The pipeline deliberately converts provider/network failures into a
+        # status instead of raising. Without an explicit task retry Celery sees
+        # that as success, leaving the item without a summary forever.
+        if status == "failed" and self.request.retries < self.max_retries:
+            countdown = 30 * (2 ** self.request.retries)
+            logger.warning(
+                "AI processing failed for news_id=%d; retry %d/%d in %ds",
+                news_id,
+                self.request.retries + 1,
+                self.max_retries,
+                countdown,
+            )
+            raise self.retry(countdown=countdown)
 
         if not topics:
             logger.warning("No topics for news_id=%d | text=%.120s", news_id, text[:120])
@@ -277,7 +290,7 @@ def process_news_ai(news_id: int, force: bool = False):
         news.importance_score = score_importance(topics, history)
         session.commit()
 
-        if topics:
+        if topics and notify:
             send_notifications.delay(news_id)
 
 
@@ -313,14 +326,19 @@ def reprocess_news_ai(batch_size: int = 100, include_failed: bool = False):
             )
 
         rows = session.execute(
-            select(NewsItem.id)
+            select(NewsItem.id, NewsItem.ai_status)
             .where(recovery_condition)
             .order_by(NewsItem.id.desc())
             .limit(batch_size)
-        ).scalars().all()
+        ).all()
 
-        for news_id in rows:
-            process_news_ai.delay(news_id)
+        for news_id, ai_status in rows:
+            # Historical NULL/failed rows must not produce a burst of old
+            # Telegram notifications when manually backfilled.
+            process_news_ai.apply_async(
+                args=[news_id],
+                kwargs={"notify": not include_failed and ai_status == "pending"},
+            )
 
         logger.info("reprocess_news_ai: dispatched %d items", len(rows))
         return f"Dispatched {len(rows)} items for reprocessing"

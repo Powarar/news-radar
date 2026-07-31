@@ -156,7 +156,10 @@ function NewsCard({ item, user, onReact, enterDelay = 0 }: {
     }
   }
 
-  const text = item.summary ?? (item.body.length > 240 ? item.body.slice(0, 240) + "…" : item.body);
+  const fallbackText = item.body.replace(/\s+/g, " ").trim();
+  const text = item.summary ?? (
+    fallbackText.length > 140 ? fallbackText.slice(0, 140).trimEnd() + "…" : fallbackText
+  );
   const topTopics = Object.entries(item.topics)
     .sort(([, a], [, b]) => b - a)
     .filter(([, score]) => score > 0.15)
