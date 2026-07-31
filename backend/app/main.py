@@ -16,6 +16,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="News Radar API",
@@ -66,7 +67,7 @@ async def readiness():
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
         await redis.ping()
-    except Exception:  # noqa: BLE001 — return a stable readiness response
-        logging.exception("Readiness check failed")
+    except Exception:
+        logger.exception("Readiness check failed")
         return JSONResponse(status_code=503, content={"status": "not_ready"})
     return {"status": "ready"}
