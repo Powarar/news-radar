@@ -25,7 +25,7 @@ const TYPE_LABELS: Record<string, string> = {
 const TYPE_COLORS: Record<string, string> = {
   telegram: "#2aabee",
   website: "#5b8dee",
-  rss: "#e79b47",
+  rss: "#ff6249",
 };
 
 // ─── Toggle ───────────────────────────────────────────────────────────────────

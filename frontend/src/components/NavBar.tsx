@@ -21,11 +21,11 @@ function RadarIcon() {
 export default function NavBar() {
   const { pathname } = useLocation();
   return (
-    <nav style={s.nav}>
-      <Link to="/feed" style={s.navLogo}>
+    <nav className="app-nav" style={s.nav}>
+      <Link className="app-nav-logo" to="/feed" style={s.navLogo}>
         <span style={s.navLogoMark}><RadarIcon /></span> News Radar
       </Link>
-      <div style={s.navLinks}>
+      <div className="app-nav-links" style={s.navLinks}>
         {NAV_LINKS.map(({ to, label }) => {
           const active = pathname === to || (to !== "/feed" && pathname.startsWith(to));
           return (

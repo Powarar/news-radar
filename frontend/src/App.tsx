@@ -6,6 +6,13 @@ import NavBar from "./components/NavBar";
 import PreferencesPage from "./components/PreferencesPage";
 import SourcesPage from "./components/SourcesPage";
 import { TOPIC_LABELS, TOPIC_COLORS } from "./constants";
+import {
+  readAppearance,
+  saveAppearance,
+  type AppearanceSettings,
+  type UiFont,
+  type UiScale,
+} from "./appearance";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -157,13 +164,14 @@ function NewsCard({ item, user, onReact, enterDelay = 0 }: {
 
   return (
     <article
-      className="card-enter"
+      className="news-card card-enter"
       style={{ ...s.card, animationDelay: `${enterDelay}ms` }}
     >
       {item.image_url && (
         <img
           src={item.image_url}
           alt=""
+          className="news-card-image"
           style={s.cardThumb}
           onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
         />
@@ -262,7 +270,7 @@ function GuestBanner() {
     <div style={s.guestBanner}>
       <span>Хотите персонализировать ленту? </span>
       <Link to="/login" style={{ color: "var(--accent)", fontWeight: 600 }}>Войдите</Link>
-      <span> — AI подберёт новости под ваши интересы.</span>
+      <span> — соберите ленту под свои интересы.</span>
     </div>
   );
 }
@@ -297,6 +305,9 @@ function FeedPage({ authReady }: { authReady: boolean }) {
       const r = await api.get<{ items: NewsItem[]; total: number }>(
         `/v1/news/?limit=${LIMIT}&offset=${p * LIMIT}&sort=${sortMode}`
       );
+      if (!Array.isArray(r.data?.items) || typeof r.data.total !== "number") {
+        throw new Error("Feed API returned an invalid response");
+      }
       setItems(r.data.items);
       setTotal(r.data.total);
       setPage(p);
@@ -348,6 +359,14 @@ function FeedPage({ authReady }: { authReady: boolean }) {
     <div style={s.page}>
       <NavBar />
       <main className="page-enter" style={s.feed}>
+        <header style={s.feedHeader}>
+          <div style={s.feedKicker}>
+            <span className="live-dot" /> Сводка обновляется
+          </div>
+          <h1 className="feed-title" style={s.feedTitle}>Главное сейчас</h1>
+          <p style={s.feedSubtitle}>Источники без лишнего шума — в одной ленте.</p>
+        </header>
+
         {!userLoading && !user && <GuestBanner />}
 
         <div style={s.sortBar}>
@@ -428,6 +447,12 @@ function FeedPage({ authReady }: { authReady: boolean }) {
 function ProfilePage() {
   const { user, loading } = useUser();
   const navigate = useNavigate();
+  const [appearance, setAppearance] = useState<AppearanceSettings>(() => readAppearance());
+
+  function updateAppearance(next: AppearanceSettings) {
+    setAppearance(next);
+    saveAppearance(next);
+  }
 
   function logout() {
     localStorage.removeItem("access_token");
@@ -461,6 +486,62 @@ function ProfilePage() {
           <div style={s.profileActions}>
             <Link to="/preferences" style={s.profileActionBtn}>Настроить темы →</Link>
             <button style={s.logoutBtn} onClick={logout}>Выйти</button>
+          </div>
+
+          <div style={s.appearancePanel}>
+            <div style={s.appearanceHeading}>
+              <span>Вид приложения</span>
+              <span style={s.appearanceHint}>сохраняется на устройстве</span>
+            </div>
+
+            <div style={s.appearanceRow}>
+              <span style={s.appearanceLabel}>Масштаб</span>
+              <div style={s.appearanceControls}>
+                {([
+                  ["compact", "−"],
+                  ["normal", "100%"],
+                  ["large", "+"],
+                ] as [UiScale, string][]).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-label={`Масштаб: ${value}`}
+                    aria-pressed={appearance.scale === value}
+                    style={{
+                      ...s.appearanceBtn,
+                      ...(appearance.scale === value ? s.appearanceBtnActive : {}),
+                    }}
+                    onClick={() => updateAppearance({ ...appearance, scale: value })}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={s.appearanceRow}>
+              <span style={s.appearanceLabel}>Шрифт</span>
+              <div style={s.fontControls}>
+                {([
+                  ["system", "Обычный"],
+                  ["editorial", "Газета"],
+                  ["compact", "Плотный"],
+                ] as [UiFont, string][]).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={appearance.font === value}
+                    style={{
+                      ...s.fontBtn,
+                      ...(appearance.font === value ? s.appearanceBtnActive : {}),
+                    }}
+                    onClick={() => updateAppearance({ ...appearance, font: value })}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -546,7 +627,7 @@ function LoginPage() {
             </svg>
           </span>
           <h1 style={s.authTitle}>News Radar</h1>
-          <p style={s.authSubtitle}>Новости с AI‑персонализацией</p>
+          <p style={s.authSubtitle}>Личная лента без информационного шума</p>
         </div>
 
         <div style={s.tabs}>
@@ -636,9 +717,9 @@ const s: Record<string, React.CSSProperties> = {
   // Layout
   page: { minHeight: "100dvh", background: "var(--bg)" },
   feed: {
-    maxWidth: 700,
+    maxWidth: 760,
     margin: "0 auto",
-    padding: "24px 20px 80px",
+    padding: "34px 24px 90px",
   },
   centerFull: {
     minHeight: "calc(100dvh - 56px)",
@@ -649,17 +730,18 @@ const s: Record<string, React.CSSProperties> = {
 
   // Article row — editorial, no card chrome
   card: {
-    padding: "20px 0",
+    padding: "24px 0 24px 18px",
     borderBottom: "1px solid var(--border)",
+    borderLeft: "2px solid transparent",
   },
   cardThumb: {
     display: "block",
     width: "100%",
     height: 200,
     objectFit: "cover" as const,
-    borderRadius: 8,
-    marginBottom: 14,
-    opacity: 0.93,
+    borderRadius: 3,
+    marginBottom: 16,
+    opacity: 0.96,
   },
   cardMeta: {
     display: "flex",
@@ -677,7 +759,7 @@ const s: Record<string, React.CSSProperties> = {
   metaSep: { fontSize: 11, color: "var(--text-subtle)" },
   time: { fontSize: 11, color: "var(--text-subtle)" },
   cardTitle: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: 700,
     lineHeight: 1.28,
     color: "var(--text)",
@@ -685,7 +767,7 @@ const s: Record<string, React.CSSProperties> = {
     marginBottom: 6,
   },
   cardBody: {
-    fontSize: 14,
+    fontSize: 15,
     color: "var(--text-muted)",
     lineHeight: 1.65,
     marginBottom: 10,
@@ -745,6 +827,32 @@ const s: Record<string, React.CSSProperties> = {
   },
 
   // Sort bar
+  feedHeader: {
+    paddingBottom: 24,
+    marginBottom: 18,
+    borderBottom: "1px solid var(--border-strong)",
+  },
+  feedKicker: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    color: "var(--accent)",
+    fontSize: 10,
+    fontWeight: 750,
+    letterSpacing: "0.14em",
+    textTransform: "uppercase" as const,
+    marginBottom: 8,
+  },
+  feedTitle: {
+    fontSize: 34,
+    lineHeight: 1.05,
+    letterSpacing: "-0.045em",
+    marginBottom: 8,
+  },
+  feedSubtitle: {
+    color: "var(--text-muted)",
+    fontSize: 13,
+  },
   sortBar: {
     display: "flex",
     gap: 6,
@@ -753,7 +861,9 @@ const s: Record<string, React.CSSProperties> = {
   sortChip: {
     padding: "5px 14px",
     background: "transparent",
-    border: "1px solid var(--border)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "var(--border)",
     borderRadius: 20,
     color: "var(--text-muted)",
     cursor: "pointer",
@@ -843,7 +953,7 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: "var(--radius)",
     padding: "40px 32px",
     width: "100%",
-    maxWidth: 360,
+    maxWidth: 440,
     display: "flex",
     flexDirection: "column" as const,
     alignItems: "center",
@@ -900,6 +1010,76 @@ const s: Record<string, React.CSSProperties> = {
     color: "var(--text-muted)",
     cursor: "pointer",
     fontSize: 14,
+  },
+  appearancePanel: {
+    width: "100%",
+    marginTop: 20,
+    paddingTop: 18,
+    borderTop: "1px solid var(--border)",
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 14,
+    textAlign: "left" as const,
+  },
+  appearanceHeading: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  appearanceHint: {
+    color: "var(--text-subtle)",
+    fontSize: 10,
+    fontWeight: 500,
+  },
+  appearanceRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+  },
+  appearanceLabel: {
+    color: "var(--text-muted)",
+    fontSize: 12,
+    minWidth: 62,
+  },
+  appearanceControls: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 42px)",
+    gap: 4,
+  },
+  appearanceBtn: {
+    height: 32,
+    background: "var(--bg-elevated)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    borderRadius: "var(--radius-xs)",
+    color: "var(--text-muted)",
+    fontSize: 12,
+    fontWeight: 650,
+    cursor: "pointer",
+  },
+  appearanceBtnActive: {
+    color: "var(--text)",
+    borderColor: "var(--accent)",
+    background: "var(--accent-dim)",
+  },
+  fontControls: {
+    display: "flex",
+    gap: 4,
+  },
+  fontBtn: {
+    padding: "7px 9px",
+    background: "var(--bg-elevated)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    borderRadius: "var(--radius-xs)",
+    color: "var(--text-muted)",
+    fontSize: 11,
+    cursor: "pointer",
   },
 
   // Auth

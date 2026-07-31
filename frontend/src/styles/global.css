@@ -1,25 +1,38 @@
 /* Design tokens */
 :root {
-  --bg:           #0d0d0c;
-  --bg-card:      #161614;
-  --bg-elevated:  #1e1e1b;
-  --text:         #edede9;
-  --text-muted:   #7a7a74;
-  --text-subtle:  #4a4a45;
-  --accent:       #e79b47;
-  --accent-hover: #d4883a;
-  --accent-dim:   rgba(231,155,71,0.12);
+  --bg:           #111210;
+  --bg-card:      #171815;
+  --bg-elevated:  #20211d;
+  --text:         #f0eee7;
+  --text-muted:   #97978f;
+  --text-subtle:  #62635d;
+  --accent:       #ff6249;
+  --accent-hover: #ff7b66;
+  --accent-dim:   rgba(255,98,73,0.11);
   --danger:       #e05252;
   --danger-dim:   rgba(224,82,82,0.12);
   --success:      #4caf7d;
   --success-dim:  rgba(76,175,125,0.12);
-  --border:       rgba(255,255,255,0.07);
-  --border-hover: rgba(255,255,255,0.13);
-  --radius:       12px;
-  --radius-sm:    7px;
-  --radius-xs:    4px;
+  --border:       rgba(240,238,231,0.09);
+  --border-strong: rgba(240,238,231,0.2);
+  --border-hover: rgba(240,238,231,0.18);
+  --radius:       6px;
+  --radius-sm:    4px;
+  --radius-xs:    3px;
   --ease:         cubic-bezier(0.16, 1, 0.3, 1);
-  --font:         "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font:         -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: var(--font);
+  --ui-scale:     1;
+}
+
+:root[data-font="editorial"] {
+  --font: Georgia, "Times New Roman", serif;
+  --font-display: Georgia, "Times New Roman", serif;
+}
+
+:root[data-font="compact"] {
+  --font: "Arial Narrow", "Roboto Condensed", Arial, sans-serif;
+  --font-display: "Arial Narrow", "Roboto Condensed", Arial, sans-serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -32,7 +45,11 @@ body {
   line-height: 1.6;
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
+  zoom: var(--ui-scale);
 }
+
+button, input, select, textarea { font-family: inherit; }
+h1, h2, h3, .feed-title { font-family: var(--font-display); }
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); }
@@ -119,7 +136,7 @@ input[type=range]::-moz-range-thumb {
 
 /* Nav link hover */
 .nav-link:hover {
-  background: rgba(255,255,255,0.05) !important;
+  background: rgba(240,238,231,0.05) !important;
   color: var(--text) !important;
 }
 
@@ -130,6 +147,47 @@ input[type=range]::-moz-range-thumb {
 }
 .nav-dot {
   animation: navDotIn 180ms var(--ease) both;
+}
+
+.news-card {
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.news-card:hover {
+  border-left-color: var(--accent) !important;
+  background: rgba(240,238,231,0.018);
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-dim);
+}
+
+@media (max-width: 640px) {
+  body { padding-bottom: 64px; }
+
+  .app-nav {
+    position: fixed !important;
+    top: auto !important;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 10px;
+    height: 54px !important;
+    padding: 5px !important;
+    border: 1px solid var(--border-strong) !important;
+    border-radius: 8px;
+    background: rgba(23,24,21,0.94) !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.38);
+  }
+
+  .app-nav-logo { display: none !important; }
+  .app-nav-links { width: 100%; justify-content: space-around; gap: 0 !important; }
+  .nav-link { flex: 1; padding: 7px 4px !important; font-size: 11px !important; }
+  .news-card { padding-left: 12px !important; }
+  .news-card-image { height: 180px !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {

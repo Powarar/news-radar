@@ -10,9 +10,9 @@ export default defineConfig({
       manifest: {
         name: "News Radar",
         short_name: "NewsRadar",
-        description: "Global news aggregator with AI personalization",
-        theme_color: "#0f172a",
-        background_color: "#0f172a",
+        description: "A focused personal news feed",
+        theme_color: "#111210",
+        background_color: "#111210",
         display: "standalone",
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
