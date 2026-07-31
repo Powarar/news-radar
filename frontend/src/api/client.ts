@@ -1,8 +1,12 @@
 import axios from "axios";
 
-// Vite exposes a defined but empty string when a build arg is passed empty.
-// Treat that the same as a missing value so production always reaches /api.
-const API_BASE_URL = import.meta.env.VITE_API_URL?.trim() || "/api";
+function normalizeApiBase(configuredUrl: string | undefined): string {
+  const value = configuredUrl?.trim().replace(/\/+$/, "");
+  if (!value) return "/api";
+  return value.endsWith("/api") ? value : `${value}/api`;
+}
+
+const API_BASE_URL = normalizeApiBase(import.meta.env.VITE_API_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
