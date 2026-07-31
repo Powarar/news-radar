@@ -35,9 +35,13 @@ def parse_channel(channel: str, limit: int = 20) -> list[dict]:
         r = _get_client().get(f"https://t.me/s/{channel}", headers=headers)
         r.raise_for_status()
     except httpx.HTTPStatusError as e:
+        if e.response.status_code == 429 or e.response.status_code >= 500:
+            raise ConnectionError(
+                f"Temporary Telegram error for @{channel}: {e.response.status_code}"
+            ) from e
         raise ValueError(f"Channel @{channel} not accessible: {e.response.status_code}")
-    except httpx.RequestError:
-        return []
+    except httpx.RequestError as e:
+        raise ConnectionError(f"Telegram request failed for @{channel}") from e
 
     soup = BeautifulSoup(r.text, "html.parser")
     messages = soup.find_all("div", class_="tgme_widget_message_wrap")

@@ -10,10 +10,10 @@ class NewsService:
 
     async def react(self, user_id: int, news_id: int, reaction: ReactionType) -> NewsReaction | None:
         # LookupError от репозитория не ловим — пусть всплывает в route
-        result = await self.repo.add_reaction(user_id, news_id, reaction)
+        result, preference_delta = await self.repo.add_reaction(user_id, news_id, reaction)
 
-        if result is not None:
+        if preference_delta:
             from app.workers.tasks import update_topic_preferences
-            update_topic_preferences.delay(user_id, news_id, reaction.value)
+            update_topic_preferences.delay(user_id, news_id, preference_delta)
 
         return result

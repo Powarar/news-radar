@@ -4,10 +4,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+from sqlalchemy import text
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.v1.routes import auth, bot, news, preferences, sources, users
 from app.core.config import settings
+from app.core.database import AsyncSessionLocal
+from app.core.redis import redis
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,8 +29,9 @@ Instrumentator().instrument(app).expose(app, endpoint="/api/metrics")
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,
-    https_only=False
-    )
+    https_only=not settings.debug,
+    same_site="lax",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,3 +57,16 @@ async def lookup_error_handler(request: Request, exc: LookupError) -> JSONRespon
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "app": settings.app_name}
+
+
+@app.get("/api/health/ready")
+async def readiness():
+    """Report readiness only when PostgreSQL and Redis are reachable."""
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        await redis.ping()
+    except Exception:  # noqa: BLE001 — return a stable readiness response
+        logging.exception("Readiness check failed")
+        return JSONResponse(status_code=503, content={"status": "not_ready"})
+    return {"status": "ready"}

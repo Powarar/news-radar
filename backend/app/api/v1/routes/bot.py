@@ -1,7 +1,8 @@
+import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -16,7 +17,10 @@ router = APIRouter()
 
 def verify_bot_token(request: Request) -> None:
     token = request.headers.get("X-Bot-Token", "")
-    if not settings.telegram_bot_token or token != settings.telegram_bot_token:
+    if (
+        not settings.telegram_bot_token
+        or not secrets.compare_digest(token, settings.telegram_bot_token)
+    ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bot token")
 
 
@@ -24,13 +28,13 @@ BotAuth = Annotated[None, Depends(verify_bot_token)]
 
 
 class BotReactRequest(BaseModel):
-    telegram_id: str
-    news_id: int
+    telegram_id: str = Field(min_length=1, max_length=64)
+    news_id: int = Field(gt=0)
     reaction: ReactionType
 
 
 class BotNotificationsRequest(BaseModel):
-    telegram_id: str
+    telegram_id: str = Field(min_length=1, max_length=64)
     enabled: bool
 
 

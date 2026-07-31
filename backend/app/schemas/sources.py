@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.core.url_security import validate_public_http_url
 
 
 class SourceResponse(BaseModel):
@@ -22,3 +24,8 @@ class SourceCreateRequest(BaseModel):
     language: str = Field(default="en", min_length=2, max_length=10)
     country: str | None = Field(default=None, min_length=2, max_length=10)
     topics: list[str] | None = None
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        return validate_public_http_url(value)

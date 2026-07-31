@@ -41,6 +41,7 @@ Thumbs.db
 # Coverage
 .coverage
 htmlcov/
+backups/
 
 # AI agent
 .commandcode/

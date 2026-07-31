@@ -10,6 +10,7 @@ class UserResponse(BaseModel):
     email: str | None
     username: str
     is_active: bool
+    is_admin: bool
     plan: UserPlan
     language: str
     country: str | None

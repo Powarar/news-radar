@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from jwt import InvalidTokenError
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.redis import redis
@@ -36,7 +37,8 @@ class AuthService:
         if await self.repo.get_by_username(data.username):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
 
-        hashed = hash_password(data.password)
+        # bcrypt is deliberately CPU-expensive; keep it off the API event loop.
+        hashed = await run_in_threadpool(hash_password, data.password)
         user = await self.repo.create(data.email, data.username, hashed)
         return self._make_tokens(user.id)
 
@@ -44,7 +46,12 @@ class AuthService:
         user = await self.repo.get_by_email(data.email)
         if not user or not user.hashed_password:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-        if not verify_password(data.password, user.hashed_password):
+        password_ok = await run_in_threadpool(
+            verify_password,
+            data.password,
+            user.hashed_password,
+        )
+        if not password_ok:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
@@ -146,12 +153,11 @@ class AuthService:
         return code
 
     async def exchange_oauth_code(self, code: str) -> TokenResponse:
-        raw = await redis.get(f"oauth_code:{code}")
+        # GETDEL is atomic: two concurrent exchanges cannot redeem one code twice.
+        raw = await redis.getdel(f"oauth_code:{code}")
 
         if not raw:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired code")
-
-        await redis.delete(f"oauth_code:{code}")
 
         data = json.loads(raw)
         return TokenResponse(**data)
@@ -166,7 +172,33 @@ class AuthService:
             ) from exc
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
-        return self._make_tokens(payload["sub"])
+
+        try:
+            user_id = int(payload["sub"])
+            jti = payload["jti"]
+            ttl = payload["exp"] - int(datetime.now(timezone.utc).timestamp())
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+            ) from exc
+
+        if ttl <= 0:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired")
+
+        # Redis SET NX makes each refresh token single-use and rejects replay.
+        accepted = await redis.set(f"used_refresh:{jti}", "1", ex=ttl, nx=True)
+        if not accepted:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token already used",
+            )
+
+        user = await self.repo.get_by_id(user_id)
+        if not user or not user.is_active:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User unavailable")
+
+        return self._make_tokens(user.id)
 
     @staticmethod
     def _make_tokens(user_id: int) -> TokenResponse:
@@ -177,7 +209,18 @@ class AuthService:
         )
 
     async def logout(self, token: str) -> None:
-        payload = decode_token(token)
+        try:
+            payload = decode_token(token)
+        except InvalidTokenError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+            ) from exc
+        if payload.get("type") != "access":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type",
+            )
         ttl = payload["exp"] - int(datetime.now(timezone.utc).timestamp())
 
         if ttl > 0:

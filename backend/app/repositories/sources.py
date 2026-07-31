@@ -44,8 +44,11 @@ class SourcesRepository:
         await self.db.refresh(source)
         return source
 
-    async def get_by_id(self, source_id: int) -> Source | None:
-        return await self.db.scalar(select(Source).where(Source.id == source_id))
+    async def get_by_id(self, source_id: int, *, for_update: bool = False) -> Source | None:
+        stmt = select(Source).where(Source.id == source_id)
+        if for_update:
+            stmt = stmt.with_for_update()
+        return await self.db.scalar(stmt)
 
     async def _get_or_create_setting(self, user_id: int, source_id: int) -> UserSourceSetting:
         setting = await self.db.scalar(
@@ -61,7 +64,7 @@ class SourcesRepository:
         return setting
 
     async def toggle(self, user_id: int, source_id: int) -> dict | None:
-        source = await self.get_by_id(source_id)
+        source = await self.get_by_id(source_id, for_update=True)
         if not source:
             return None
         setting = await self._get_or_create_setting(user_id, source_id)
@@ -70,7 +73,7 @@ class SourcesRepository:
         return self._serialize(source, setting)
 
     async def toggle_blacklist(self, user_id: int, source_id: int) -> dict | None:
-        source = await self.get_by_id(source_id)
+        source = await self.get_by_id(source_id, for_update=True)
         if not source:
             return None
         setting = await self._get_or_create_setting(user_id, source_id)

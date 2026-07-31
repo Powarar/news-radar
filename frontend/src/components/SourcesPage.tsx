@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
+import type { User } from "../types";
 import NavBar from "./NavBar";
 
 interface Source {
@@ -86,6 +87,7 @@ function SkeletonCard() {
 
 export default function SourcesPage() {
   const [sources, setSources] = useState<Source[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: "", url: "", type: "telegram", language: "ru", country: "", topics: "" });
@@ -120,7 +122,15 @@ export default function SourcesPage() {
     );
   });
 
-  useEffect(() => { load(); return () => clearTimeout(messageTimer.current); }, []);
+  useEffect(() => {
+    load();
+    if (localStorage.getItem("access_token")) {
+      api.get<User>("/v1/users/me")
+        .then((response) => setIsAdmin(response.data.is_admin))
+        .catch(() => setIsAdmin(false));
+    }
+    return () => clearTimeout(messageTimer.current);
+  }, []);
 
   async function toggle(sourceId: number) {
     try {
@@ -178,9 +188,11 @@ export default function SourcesPage() {
       <div className="page-enter" style={s.wrap}>
         <div style={s.headerRow}>
           <h1 style={s.heading}>Источники</h1>
-          <button onClick={() => setShowAdd(!showAdd)} style={showAdd ? s.cancelBtn : s.addBtn}>
-            {showAdd ? "Отмена" : "+ Добавить"}
-          </button>
+          {isAdmin && (
+            <button onClick={() => setShowAdd(!showAdd)} style={showAdd ? s.cancelBtn : s.addBtn}>
+              {showAdd ? "Отмена" : "+ Добавить"}
+            </button>
+          )}
         </div>
         <p style={s.subtitle}>
           Настройте, из каких источников получать новости. Отключённые и скрытые не попадут в ленту.
@@ -212,7 +224,7 @@ export default function SourcesPage() {
           </select>
         </div>
 
-        {showAdd && (
+        {isAdmin && showAdd && (
           <form onSubmit={addSource} style={s.addForm}>
             <input style={s.input} type="text" placeholder="Название (например, Медуза)"
               value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />

@@ -2,6 +2,7 @@ export interface User {
   id: number;
   email: string;
   username: string;
+  is_admin: boolean;
   language: string;
   country: string | null;
   plan: "free" | "pro";

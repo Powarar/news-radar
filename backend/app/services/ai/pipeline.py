@@ -3,12 +3,12 @@ Unified AI pipeline — classify topics AND summarize in one Groq call.
 Falls back to keyword classifier if Groq is unavailable; summary is skipped on fallback.
 """
 
-import json
 import logging
 import re
 import time
 
 import httpx
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.core.config import settings
 from app.core.text_utils import strip_emoji
@@ -22,6 +22,7 @@ _MODEL = "llama-3.1-8b-instant"
 _MAX_RETRIES = 3
 _BACKOFF_BASE = 2.0
 _MIN_RETRY_AFTER = 1.0
+_MAX_RETRY_AFTER = 60.0
 
 TOPICS = [
     "politics", "military", "technology", "health",
@@ -74,10 +75,19 @@ _ABBREV = re.compile(
 _client: httpx.Client | None = None
 
 
+class GroqNewsResponse(BaseModel):
+    """Expected shape of the JSON object returned by Groq."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    topics: dict[str, float]
+    summary: str
+
+
 def _get_client() -> httpx.Client:
     global _client
     if _client is None or _client.is_closed:
-        _client = httpx.Client(timeout=30)
+        _client = httpx.Client(timeout=settings.groq_api_timeout)
     return _client
 
 
@@ -110,13 +120,13 @@ def _parse_retry_after(resp: httpx.Response) -> float:
         body = resp.json()
         retry = body.get("error", {}).get("retry_after_seconds")
         if retry is not None:
-            return float(retry)
+            return max(_MIN_RETRY_AFTER, min(float(retry), _MAX_RETRY_AFTER))
     except (ValueError, KeyError, TypeError, AttributeError):
         pass
     header = resp.headers.get("retry-after", "")
     if header:
         try:
-            return float(header)
+            return max(_MIN_RETRY_AFTER, min(float(header), _MAX_RETRY_AFTER))
         except ValueError:
             pass
     return _MIN_RETRY_AFTER
@@ -155,6 +165,7 @@ def process(text: str, news_id: int | None = None) -> tuple[dict[str, float], st
                     ],
                     "temperature": 0,
                     "max_tokens": 300,
+                    "response_format": {"type": "json_object"},
                 },
             )
 
@@ -206,47 +217,29 @@ def process(text: str, news_id: int | None = None) -> tuple[dict[str, float], st
         logger.error("Pipeline: exhausted retries [%s]", label)
         return classify_keywords(text), None, "failed"
 
-    # Parse successful response
-    match = re.search(r"\{.*\}", content, re.DOTALL)
-    if not match:
-        logger.warning(
-            "Pipeline: no JSON in response, keyword fallback | raw=%r [%s]",
-            content[:300], label,
-        )
-        return classify_keywords(text), None, "failed"
-
     try:
-        result = json.loads(match.group())
-    except json.JSONDecodeError as e:
+        result = GroqNewsResponse.model_validate_json(content)
+    except ValidationError as e:
         logger.warning(
-            "Pipeline: invalid JSON %s, keyword fallback | raw=%r [%s]",
+            "Pipeline: response validation failed %s, keyword fallback | raw=%r [%s]",
             e, content[:300], label,
         )
         return classify_keywords(text), None, "failed"
 
-    topics_raw = result.get("topics", {})
-    if not isinstance(topics_raw, dict):
-        topics_raw = {}
-
     topics: dict[str, float] = {}
-    for k, v in topics_raw.items():
+    for k, score in result.topics.items():
         if k not in TOPICS:
             continue
-        try:
-            score = float(v)
-        except (TypeError, ValueError):
-            continue
-        if score >= 0.15:
+        if 0.15 <= score <= 1.0:
             topics[k] = score
 
-    summary_raw = result.get("summary", "")
-    if not isinstance(summary_raw, str):
-        summary_raw = ""
-
     summary = None
-    if summary_raw.strip():
-        summary = strip_emoji(summary_raw.strip())
+    if result.summary.strip():
+        summary = strip_emoji(result.summary.strip())
         summary = _first_sentence(summary)
+        words = summary.split()
+        if len(words) > 15:
+            summary = " ".join(words[:15]).rstrip(" ,;:") + "…"
         if not summary:
             summary = None
 

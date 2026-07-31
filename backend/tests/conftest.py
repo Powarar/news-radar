@@ -43,6 +43,7 @@ def mock_redis():
     m = AsyncMock()
     m.exists.return_value = 0
     m.get.return_value = None
+    m.getdel.return_value = None
     m.set.return_value = True
     m.setex.return_value = True
     m.delete.return_value = True

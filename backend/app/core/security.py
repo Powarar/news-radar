@@ -51,6 +51,15 @@ def decode_token(token: str) -> dict:
     return jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
 
 
+def _is_recent_auth_date(raw_auth_date: object, *, max_age_seconds: int = 600) -> bool:
+    try:
+        auth_date = int(raw_auth_date)
+    except (TypeError, ValueError):
+        return False
+    age = time.time() - auth_date
+    return 0 <= age <= max_age_seconds
+
+
 def verify_webapp_init_data(init_data: str) -> dict | None:
     """Verify Telegram Mini App initData and return parsed user dict, or None if invalid."""
     import json
@@ -61,7 +70,7 @@ def verify_webapp_init_data(init_data: str) -> dict | None:
     if not received_hash:
         return None
 
-    if time.time() - int(params.get("auth_date", 0)) > 600:
+    if not _is_recent_auth_date(params.get("auth_date")):
         return None
 
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
@@ -85,7 +94,7 @@ def verify_telegram_hash(data: dict) -> bool:
         return False
 
     # принимаем только свежие данные — не старше 10 минут
-    if time.time() - int(data.get("auth_date", 0)) > 600:
+    if not _is_recent_auth_date(data.get("auth_date")):
         return False
 
     # все поля кроме hash, отсортированные, каждое на новой строке

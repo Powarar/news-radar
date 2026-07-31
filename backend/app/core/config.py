@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     app_name: str = "news-radar"
     app_env: str = "development"
     debug: bool = True
+    trust_proxy_headers: bool = False
     secret_key: str
 
     #TTL
@@ -59,15 +60,6 @@ class Settings(BaseSettings):
 
     # Telegram
     telegram_bot_token: str = ""
-    telegram_api_id: str = ""
-    telegram_api_hash: str = ""
-    telegram_session_name: str = "newsradar"
-
-    # HuggingFace (deprecated, kept for compatibility)
-    huggingface_api_token: str = ""
-    hf_classifier_model_url: str = ""
-    hf_summarizer_model_url: str = ""
-
     # Groq
     groq_api_key: str = ""
     groq_api_timeout: int = 30

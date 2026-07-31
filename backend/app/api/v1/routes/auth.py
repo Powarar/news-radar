@@ -1,3 +1,4 @@
+import secrets
 from typing import Annotated
 
 from authlib.integrations.starlette_client import OAuth
@@ -63,6 +64,7 @@ async def login(
 async def refresh(
     data: RefreshRequest,
     service: Annotated[AuthService, Depends(get_auth_service)],
+    _rate_limit: Annotated[None, Depends(auth_rate_limit)],
 ):
     return await service.refresh(data)
 
@@ -109,7 +111,10 @@ async def telegram_magic_link(
     service: Annotated[AuthService, Depends(get_auth_service)],
 ):
     bot_token = request.headers.get("X-Bot-Token", "")
-    if not settings.telegram_bot_token or bot_token != settings.telegram_bot_token:
+    if (
+        not settings.telegram_bot_token
+        or not secrets.compare_digest(bot_token, settings.telegram_bot_token)
+    ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bot token")
 
     data = await request.json()

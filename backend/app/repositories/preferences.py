@@ -18,6 +18,12 @@ class PreferencesRepository:
         return result.scalar_one_or_none()
 
     async def set_preferences(self, user_id: int, topics: dict[str, float]) -> list[UserTopicPreference]:
+        # Replacing the full preference set is one serialized transaction per user.
+        await self.db.scalar(
+            select(User.id)
+            .where(User.id == user_id)
+            .with_for_update()
+        )
         await self.db.execute(
             delete(UserTopicPreference).where(UserTopicPreference.user_id == user_id)
         )

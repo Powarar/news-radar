@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+tests/
+.env
+.env.*
+*.creds
+celerybeat-schedule*
+.DS_Store
+.git/
+.gitignore
+README.md

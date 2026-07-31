@@ -7,9 +7,10 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
-from app.models.news import NewsItem
+from app.models.news import NewsItem, ReactionType
 from app.models.source import Source
 from app.models.user import User, UserSourceSetting, UserTopicPreference
+from app.repositories.news import NewsRepository
 
 BASE = "/api/v1/news"
 
@@ -181,6 +182,23 @@ class TestRelevanceSort:
         r = await client.get(f"{BASE}/", headers=auth_headers(user))
         assert len(r.json()["items"]) == 0
 
+    async def test_disabled_source_is_excluded(self, client: AsyncClient, db_session: AsyncSession):
+        user = await make_user(db_session)
+        src = await make_source(db_session)
+        db_session.add(
+            UserSourceSetting(
+                user_id=user.id,
+                source_id=src.id,
+                enabled=False,
+            )
+        )
+        await db_session.commit()
+
+        await make_news(db_session, src.id)
+        r = await client.get(f"{BASE}/", headers=auth_headers(user))
+
+        assert r.json()["items"] == []
+
     async def test_no_preferences_falls_back_to_date(self, client: AsyncClient, db_session: AsyncSession):
         """User with no preferences should get date-sorted feed."""
         now = datetime.now(timezone.utc)
@@ -307,6 +325,33 @@ class TestPersonalizedFreshness:
         assert recent.id in ids
         assert stale.id not in ids
         assert payload["total"] == 1
+
+
+# ─── Reaction state transitions ───────────────────────────────────────────────
+
+
+class TestReactionPreferenceDelta:
+    async def test_add_remove_and_replace_return_exact_delta(self, db_session: AsyncSession):
+        user = await make_user(db_session)
+        source = await make_source(db_session)
+        news = await make_news(db_session, source.id)
+        repo = NewsRepository(db_session)
+
+        reaction, delta = await repo.add_reaction(user.id, news.id, ReactionType.like)
+        assert reaction is not None
+        assert delta == 0.1
+
+        reaction, delta = await repo.add_reaction(user.id, news.id, ReactionType.like)
+        assert reaction is None
+        assert delta == -0.1
+
+        reaction, delta = await repo.add_reaction(user.id, news.id, ReactionType.dislike)
+        assert reaction is not None
+        assert delta == -0.1
+
+        reaction, delta = await repo.add_reaction(user.id, news.id, ReactionType.like)
+        assert reaction is not None
+        assert delta == 0.2
 
 
 # ─── Pagination ────────────────────────────────────────────────────────────────

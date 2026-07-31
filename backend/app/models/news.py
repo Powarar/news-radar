@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Float, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,12 +23,12 @@ class NewsItem(Base):
     __tablename__ = "news_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"))
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"), index=True)
 
     title: Mapped[str | None] = mapped_column(Text)
     body: Mapped[str] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)       # AI summarization
-    ai_status: Mapped[str | None] = mapped_column(String(20))  # ok | failed | skipped
+    ai_status: Mapped[str | None] = mapped_column(String(20))  # pending | ok | failed | skipped
     url: Mapped[str | None] = mapped_column(String(512), unique=True)
     image_url: Mapped[str | None] = mapped_column(String(512))
 
@@ -43,6 +43,10 @@ class NewsItem(Base):
 
     source: Mapped["Source"] = relationship(back_populates="news_items")
     reactions: Mapped[list["NewsReaction"]] = relationship(back_populates="news_item", cascade="all, delete")
+
+    __table_args__ = (
+        Index("ix_news_items_topics_gin", "topics", postgresql_using="gin"),
+    )
 
 
 class NewsReaction(Base):

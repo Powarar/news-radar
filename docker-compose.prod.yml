@@ -1,4 +1,8 @@
-version: "3.9"
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   db:
@@ -9,8 +13,9 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     restart: always
+    logging: *default-logging
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U newsradar"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -20,6 +25,7 @@ services:
     volumes:
       - redis_data:/data
     restart: always
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -28,6 +34,7 @@ services:
 
   backend:
     build: ./backend
+    image: news-radar-backend:latest
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
     env_file: .env.prod
     depends_on:
@@ -36,15 +43,16 @@ services:
       redis:
         condition: service_healthy
     restart: always
+    logging: *default-logging
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')\" 2>/dev/null || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/ready')\" 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 4
       start_period: 20s
 
   worker:
-    build: ./backend
+    image: news-radar-backend:latest
     command: celery -A app.workers.celery_app worker --loglevel=info -Q default,parsing,ai,notifications,preferences --concurrency=4
     env_file: .env.prod
     depends_on:
@@ -53,6 +61,7 @@ services:
       redis:
         condition: service_healthy
     restart: always
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout=5 2>/dev/null | grep -q pong || exit 1"]
       interval: 30s
@@ -61,34 +70,38 @@ services:
       start_period: 30s
 
   beat:
-    build: ./backend
+    image: news-radar-backend:latest
     command: celery -A app.workers.celery_app beat --loglevel=info
     env_file: .env.prod
     depends_on:
       worker:
         condition: service_healthy
     restart: always
+    logging: *default-logging
 
   frontend:
     build:
       context: ./frontend
       target: prod
       args:
-        VITE_API_URL: ${VITE_API_URL}
-        VITE_TG_BOT_USERNAME: ${VITE_TG_BOT_USERNAME}
-        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
+        VITE_API_URL: ${VITE_API_URL:-https://news.safonovpavel.space/api}
+        VITE_TG_BOT_USERNAME: ${VITE_TG_BOT_USERNAME:-RadrarNewsBot}
+    image: news-radar-frontend:latest
     restart: always
+    logging: *default-logging
 
   bot:
     build: ./bot
+    image: news-radar-bot:latest
     command: python main.py
     env_file: .env.prod
     depends_on:
       - backend
     restart: always
+    logging: *default-logging
 
   flower:
-    build: ./backend
+    image: news-radar-backend:latest
     command: celery -A app.workers.celery_app flower --port=5555
     env_file: .env.prod
     ports:
@@ -97,6 +110,7 @@ services:
       - redis
       - worker
     restart: always
+    logging: *default-logging
 
   nginx:
     image: nginx:alpine
@@ -105,9 +119,12 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
     restart: always
+    logging: *default-logging
 
 volumes:
   postgres_data:

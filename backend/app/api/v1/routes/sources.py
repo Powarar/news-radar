@@ -5,12 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import CurrentUser, OptionalUser
+from app.api.v1.deps import AdminUser, CurrentUser, OptionalUser
 from app.core.database import get_db
+from app.core.rate_limit import RateLimiter
 from app.repositories.sources import SourcesRepository
 from app.schemas.sources import SourceCreateRequest, SourceResponse
 
 router = APIRouter()
+source_create_rate_limit = RateLimiter(max_requests=3, window_seconds=60 * 60)
 
 
 def get_sources_repo(db: Annotated[AsyncSession, Depends(get_db)]) -> SourcesRepository:
@@ -34,9 +36,10 @@ async def list_sources(
 async def add_source(
     data: SourceCreateRequest,
     repo: Annotated[SourcesRepository, Depends(get_sources_repo)],
-    user: CurrentUser,
+    user: AdminUser,
+    _rate_limit: Annotated[None, Depends(source_create_rate_limit)],
 ):
-    """Добавить новый источник (TG канал или сайт)."""
+    """Добавить глобальный источник (только администратор)."""
     try:
         source = await repo.create(data.model_dump())
     except IntegrityError:

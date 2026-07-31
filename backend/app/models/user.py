@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -28,6 +28,7 @@ class User(Base):
     telegram_id: Mapped[str | None] = mapped_column(String(64), unique=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     plan: Mapped[UserPlan] = mapped_column(String(20), default=UserPlan.free)
     subscription_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -56,6 +57,10 @@ class UserTopicPreference(Base):
 
     user: Mapped["User"] = relationship(back_populates="preferences")
 
+    __table_args__ = (
+        UniqueConstraint("user_id", "topic", name="uq_user_topic_preferences_user_topic"),
+    )
+
 
 class UserSourceSetting(Base):
     __tablename__ = "user_source_settings"
@@ -68,3 +73,7 @@ class UserSourceSetting(Base):
 
     user: Mapped["User"] = relationship(back_populates="source_settings")
     source: Mapped["Source"] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "source_id", name="uq_user_source_settings_user_source"),
+    )

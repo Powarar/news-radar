@@ -2,13 +2,14 @@
 import logging
 import random
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import feedparser
 import httpx
 from bs4 import BeautifulSoup
 
 from app.core.text_utils import strip_emoji
+from app.core.url_security import validate_public_http_url
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +25,44 @@ _client: httpx.Client | None = None
 def _get_client() -> httpx.Client:
     global _client
     if _client is None or _client.is_closed:
-        _client = httpx.Client(follow_redirects=True, timeout=15)
+        _client = httpx.Client(follow_redirects=False, timeout=15)
     return _client
 
 
+def _fetch_public_response(url: str, headers: dict | None = None) -> httpx.Response:
+    """Fetch a public URL and validate every redirect destination."""
+    current_url = url
+    for _ in range(5):
+        validate_public_http_url(current_url, resolve_dns=True)
+        response = _get_client().get(current_url, headers=headers)
+        if not response.is_redirect:
+            response.raise_for_status()
+            return response
+
+        location = response.headers.get("location")
+        if not location:
+            raise ConnectionError(f"Redirect without Location header: {current_url}")
+        current_url = urljoin(current_url, location)
+
+    raise ConnectionError(f"Too many redirects while fetching {url}")
+
+
+def _normalise_article_url(base_url: str, raw_url: object) -> str | None:
+    if not isinstance(raw_url, str) or not raw_url.strip():
+        return None
+    candidate = urljoin(base_url, raw_url.strip())
+    try:
+        return validate_public_http_url(candidate)
+    except ValueError:
+        return None
+
+
 def fetch_rss(url: str) -> list[dict]:
-    feed = feedparser.parse(url, agent=random.choice(USER_AGENTS))
+    response = _fetch_public_response(
+        url,
+        headers={"User-Agent": random.choice(USER_AGENTS)},
+    )
+    feed = feedparser.parse(response.content)
 
     if feed.bozo and not feed.entries:
         return []
@@ -57,10 +90,14 @@ def fetch_rss(url: str) -> list[dict]:
         if title:
             title = strip_emoji(title)
 
+        article_url = _normalise_article_url(str(response.url), getattr(entry, "link", None))
+        if not article_url:
+            continue
+
         results.append({
             "title": title,
             "text": body,
-            "url": getattr(entry, "link", None),
+            "url": article_url,
             "published_at": published_at,
             "image_url": None,
         })
@@ -76,11 +113,16 @@ def fetch_html(url: str) -> list[dict]:
     }
 
     try:
-        r = _get_client().get(url, headers=headers)
-        r.raise_for_status()
-    except Exception as e:  # noqa: BLE001 — a broken source must not stop the worker
-        logger.warning("fetch_html failed for %s: %s", url, e)
+        r = _fetch_public_response(url, headers=headers)
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 429 or e.response.status_code >= 500:
+            raise ConnectionError(
+                f"Temporary HTTP error for {url}: {e.response.status_code}"
+            ) from e
+        logger.warning("fetch_html rejected %s: HTTP %d", url, e.response.status_code)
         return []
+    except httpx.RequestError as e:
+        raise ConnectionError(f"Website request failed for {url}") from e
 
     soup = BeautifulSoup(r.text, "html.parser")
 
@@ -98,7 +140,7 @@ def fetch_html(url: str) -> list[dict]:
 
         title = title_el.get_text(strip=True) if title_el else None
         text  = text_el.get_text(strip=True) if text_el else None
-        link  = link_el["href"] if link_el else None
+        link = _normalise_article_url(str(r.url), link_el["href"] if link_el else None)
 
         if not text or not link:
             continue
@@ -106,10 +148,6 @@ def fetch_html(url: str) -> list[dict]:
         text = strip_emoji(text)
         if title:
             title = strip_emoji(title)
-
-        if link.startswith("/"):
-            parsed = urlparse(url)
-            link = f"{parsed.scheme}://{parsed.netloc}{link}"
 
         results.append({
             "title": title,
@@ -123,6 +161,7 @@ def fetch_html(url: str) -> list[dict]:
 
 
 def fetch_site(url: str) -> list[dict]:
+    validate_public_http_url(url, resolve_dns=True)
     parsed = urlparse(url)
     base = f"{parsed.scheme}://{parsed.netloc}"
 

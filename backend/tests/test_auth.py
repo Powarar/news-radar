@@ -1,3 +1,5 @@
+import json
+
 BASE = "/api/v1/auth"
 
 USER = {
@@ -111,6 +113,43 @@ class TestRefresh:
         r = await client.post(f"{BASE}/refresh", json={"refresh_token": access_token})
         assert r.status_code == 401
 
+    async def test_refresh_token_cannot_be_reused(self, client, mock_redis):
+        reg = await register(client)
+        refresh_token = reg.json()["refresh_token"]
+
+        mock_redis.set.side_effect = [True, False]
+        first = await client.post(f"{BASE}/refresh", json={"refresh_token": refresh_token})
+        second = await client.post(f"{BASE}/refresh", json={"refresh_token": refresh_token})
+
+        assert first.status_code == 200
+        assert second.status_code == 401
+        assert second.json()["detail"] == "Refresh token already used"
+
+
+# ─────────────────────────────────────────────────────────────
+#  One-time OAuth code
+# ─────────────────────────────────────────────────────────────
+
+class TestOAuthExchange:
+    async def test_exchange_consumes_code_atomically(self, client, mock_redis):
+        mock_redis.getdel.return_value = json.dumps({
+            "access_token": "access",
+            "refresh_token": "refresh",
+        })
+
+        response = await client.post(f"{BASE}/exchange", json={"code": "one-time"})
+
+        assert response.status_code == 200
+        mock_redis.getdel.assert_awaited_once_with("oauth_code:one-time")
+        mock_redis.delete.assert_not_awaited()
+
+    async def test_exchange_rejects_missing_or_reused_code(self, client, mock_redis):
+        mock_redis.getdel.return_value = None
+
+        response = await client.post(f"{BASE}/exchange", json={"code": "reused"})
+
+        assert response.status_code == 400
+
 
 # ─────────────────────────────────────────────────────────────
 #  Logout
@@ -131,6 +170,23 @@ class TestLogout:
     async def test_no_token_returns_403(self, client):
         r = await client.post(f"{BASE}/logout")
         assert r.status_code == 403
+
+    async def test_invalid_token_returns_401(self, client):
+        r = await client.post(
+            f"{BASE}/logout",
+            headers={"Authorization": "Bearer garbage.token.here"},
+        )
+        assert r.status_code == 401
+
+    async def test_refresh_token_cannot_be_used_for_logout(self, client):
+        reg = await register(client)
+        refresh_token = reg.json()["refresh_token"]
+
+        r = await client.post(
+            f"{BASE}/logout",
+            headers={"Authorization": f"Bearer {refresh_token}"},
+        )
+        assert r.status_code == 401
 
     async def test_blacklisted_token_cannot_access_protected(self, client, mock_redis):
         reg = await register(client)

@@ -47,14 +47,20 @@ class NewsRepository:
         date_sort = func.coalesce(NewsItem.published_at, NewsItem.created_at)
         stmt = select(NewsItem, Source).join(Source, NewsItem.source_id == Source.id)
 
-        # Blacklist always applies when logged in
+        # Per-user source controls always apply when logged in.
         if user_id:
-            blacklisted_sq = (
+            hidden_sources_sq = (
                 select(UserSourceSetting.source_id)
-                .where(UserSourceSetting.user_id == user_id, UserSourceSetting.blacklisted)
+                .where(
+                    UserSourceSetting.user_id == user_id,
+                    or_(
+                        UserSourceSetting.blacklisted,
+                        UserSourceSetting.enabled.is_(False),
+                    ),
+                )
                 .scalar_subquery()
             )
-            stmt = stmt.where(NewsItem.source_id.not_in(blacklisted_sq))
+            stmt = stmt.where(NewsItem.source_id.not_in(hidden_sources_sq))
 
         if user_id:
             excluded = await self.get_excluded_topics(user_id)
@@ -162,6 +168,12 @@ class NewsRepository:
         return self._serialize(*row)
     
     async def set_source_blacklisted(self, user_id: int, source_id: int) -> None:
+        # Lock the parent row because a missing settings row itself cannot be locked.
+        await self.db.scalar(
+            select(Source.id)
+            .where(Source.id == source_id)
+            .with_for_update()
+        )
         setting = await self.db.scalar(
             select(UserSourceSetting).where(
                 UserSourceSetting.user_id == user_id,
@@ -183,8 +195,19 @@ class NewsRepository:
         row = result.one()
         return {"likes": row.likes or 0, "dislikes": row.dislikes or 0}
 
-    async def add_reaction(self, user_id: int, news_id: int, reaction: ReactionType) -> NewsReaction | None:
-        news = await self.db.scalar(select(NewsItem).where(NewsItem.id == news_id))
+    async def add_reaction(
+        self,
+        user_id: int,
+        news_id: int,
+        reaction: ReactionType,
+    ) -> tuple[NewsReaction | None, float]:
+        # Serialize reactions for one news row so the read/insert-or-toggle
+        # sequence cannot race with another request.
+        news = await self.db.scalar(
+            select(NewsItem)
+            .where(NewsItem.id == news_id)
+            .with_for_update()
+        )
         if not news:
             raise LookupError(f"NewsItem {news_id} not found")
 
@@ -200,17 +223,28 @@ class NewsRepository:
 
         if existing:
             if existing.reaction == reaction:
+                preference_delta = -self._reaction_effect(reaction)
                 await self.db.delete(existing)
                 await self.db.commit()
-                return None
+                return None, preference_delta
+            preference_delta = (
+                self._reaction_effect(reaction)
+                - self._reaction_effect(ReactionType(existing.reaction))
+            )
             existing.reaction = reaction
         else:
+            preference_delta = self._reaction_effect(reaction)
             existing = NewsReaction(user_id=user_id, news_item_id=news_id, reaction=reaction)
             self.db.add(existing)
 
         await self.db.commit()
         await self.db.refresh(existing)
-        return existing
+        return existing, preference_delta
+
+    @staticmethod
+    def _reaction_effect(reaction: ReactionType) -> float:
+        """Base preference delta before multiplying by a topic confidence."""
+        return 0.1 if reaction == ReactionType.like else -0.1
 
     def _serialize(self, news: NewsItem, source: Source, reaction: str | None = None, likes_count: int = 0, dislikes_count: int = 0) -> dict:
         return {

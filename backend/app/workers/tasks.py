@@ -79,7 +79,13 @@ def _should_skip(source) -> bool:
 #  fetch_telegram_channel — парсит один Telegram-канал
 # ─────────────────────────────────────────────────────────────
 
-@celery_app.task(name="app.workers.tasks.fetch_telegram_channel")
+@celery_app.task(
+    name="app.workers.tasks.fetch_telegram_channel",
+    autoretry_for=(ConnectionError,),
+    retry_backoff=True,
+    retry_jitter=True,
+    max_retries=3,
+)
 def fetch_telegram_channel(source_id: int):
     """
     Парсит публичный Telegram-канал через t.me/s/<channel>.
@@ -91,7 +97,8 @@ def fetch_telegram_channel(source_id: int):
     from app.services.parser.telegram import parse_channel
 
     with SyncSessionLocal() as session:
-        source = session.get(Source, source_id)
+        # Row lock serializes overlapping tasks for the same source.
+        source = session.get(Source, source_id, with_for_update=True)
         if not source or not source.is_active:
             return
 
@@ -112,7 +119,7 @@ def fetch_telegram_channel(source_id: int):
             select(NewsItem.url).where(NewsItem.url.in_(incoming_urls))
         ).scalars().all())
 
-        saved = 0
+        pending_ai_ids: list[int] = []
         for post in posts:
             if post["url"] in existing_urls:
                 continue
@@ -132,23 +139,34 @@ def fetch_telegram_channel(source_id: int):
                 image_url=post["image_url"],
                 language=source.language,
                 published_at=published_at,
+                ai_status="pending",
             )
             session.add(news)
             session.flush()
-            process_news_ai.delay(news.id)
-            saved += 1
+            pending_ai_ids.append(news.id)
+            existing_urls.add(post["url"])
 
         source.last_fetched_at = datetime.now(timezone.utc)
         session.commit()
 
-        return f"Saved {saved} new posts from @{channel}"
+        # Dispatch only after commit so workers can always see the new rows.
+        for news_id in pending_ai_ids:
+            process_news_ai.delay(news_id)
+
+        return f"Saved {len(pending_ai_ids)} new posts from @{channel}"
 
 
 # ─────────────────────────────────────────────────────────────
 #  fetch_website — парсит сайт или RSS-ленту
 # ─────────────────────────────────────────────────────────────
 
-@celery_app.task(name="app.workers.tasks.fetch_website")
+@celery_app.task(
+    name="app.workers.tasks.fetch_website",
+    autoretry_for=(ConnectionError,),
+    retry_backoff=True,
+    retry_jitter=True,
+    max_retries=3,
+)
 def fetch_website(source_id: int):
     """
     Парсит сайт: сначала ищет RSS,
@@ -160,7 +178,7 @@ def fetch_website(source_id: int):
     from app.services.parser.web import fetch_site
 
     with SyncSessionLocal() as session:
-        source = session.get(Source, source_id)
+        source = session.get(Source, source_id, with_for_update=True)
         if not source or not source.is_active:
             return
 
@@ -174,7 +192,7 @@ def fetch_website(source_id: int):
             select(NewsItem.url).where(NewsItem.url.in_(incoming_urls))
         ).scalars().all()) if incoming_urls else set()
 
-        saved = 0
+        pending_ai_ids: list[int] = []
         for item in items:
             if not item.get("url") or item["url"] in existing_urls:
                 continue
@@ -194,16 +212,20 @@ def fetch_website(source_id: int):
                 image_url=item.get("image_url"),
                 language=source.language,
                 published_at=published_at,
+                ai_status="pending",
             )
             session.add(news)
             session.flush()
-            process_news_ai.delay(news.id)
-            saved += 1
+            pending_ai_ids.append(news.id)
+            existing_urls.add(item["url"])
 
         source.last_fetched_at = datetime.now(timezone.utc)
         session.commit()
 
-        return f"Saved {saved} new items from {source.url}"
+        for news_id in pending_ai_ids:
+            process_news_ai.delay(news_id)
+
+        return f"Saved {len(pending_ai_ids)} new items from {source.url}"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -217,12 +239,21 @@ def fetch_website(source_id: int):
     retry_backoff=True,
     max_retries=3,
 )
-def process_news_ai(news_id: int):
+def process_news_ai(news_id: int, force: bool = False):
     """Classify topics and generate summary in one Groq call (keyword fallback if unavailable)."""
     with SyncSessionLocal() as session:
-        news = session.scalar(select(NewsItem).where(NewsItem.id == news_id))
+        # Late acknowledgement permits redelivery. Locking the row makes two
+        # concurrent deliveries serialize; the second sees the committed status.
+        news = session.scalar(
+            select(NewsItem)
+            .where(NewsItem.id == news_id)
+            .with_for_update()
+        )
         if not news:
             return
+        if not force and news.ai_status == "ok":
+            return f"News {news_id} already processed"
+
         text = (news.title or "") + " " + news.body
 
         topics, summary, status = ai_process(text, news_id=news_id)
@@ -255,25 +286,35 @@ def process_news_ai(news_id: int):
 # ─────────────────────────────────────────────────────────────
 
 @celery_app.task(name="app.workers.tasks.reprocess_news_ai")
-def reprocess_news_ai(batch_size: int = 100):
+def reprocess_news_ai(batch_size: int = 100, include_failed: bool = False):
     """
-    Find news items where summary IS NULL (or ai_status IS NULL / 'failed')
-    and re-dispatch process_news_ai for each. Use after seeding data,
-    Groq outages, or model upgrades.
+    Recover AI work that was committed but not dispatched.
+
+    Set include_failed=True for a deliberate backfill after an outage or model
+    upgrade. The periodic recovery job only picks stale "pending" rows so it
+    cannot continuously retry the full historical dataset.
 
     Trigger manually:
         celery -A app.workers.celery_app call app.workers.tasks.reprocess_news_ai
     """
     with SyncSessionLocal() as session:
+        from datetime import datetime, timedelta, timezone
+
+        stale_pending_cutoff = datetime.now(timezone.utc) - timedelta(minutes=2)
+        recovery_condition = (
+            (NewsItem.ai_status == "pending")
+            & (NewsItem.created_at < stale_pending_cutoff)
+        )
+        if include_failed:
+            recovery_condition = or_(
+                recovery_condition,
+                NewsItem.ai_status.is_(None),
+                NewsItem.ai_status == "failed",
+            )
+
         rows = session.execute(
             select(NewsItem.id)
-            .where(
-                or_(
-                    NewsItem.summary.is_(None),
-                    NewsItem.ai_status.is_(None),
-                    NewsItem.ai_status == "failed",
-                )
-            )
+            .where(recovery_condition)
             .order_by(NewsItem.id.desc())
             .limit(batch_size)
         ).scalars().all()
@@ -290,14 +331,25 @@ def reprocess_news_ai(batch_size: int = 100):
 # ─────────────────────────────────────────────────────────────
 
 @celery_app.task(name="app.workers.tasks.update_topic_preferences")
-def update_topic_preferences(user_id: int, news_id: int, reaction: str):
+def update_topic_preferences(user_id: int, news_id: int, preference_delta: float | str):
     with SyncSessionLocal() as session:
+        # Multiple reaction tasks for one user may arrive concurrently.
+        # Lock the user row before the read/modify/write preference sequence.
+        if session.scalar(
+            select(User.id)
+            .where(User.id == user_id)
+            .with_for_update()
+        ) is None:
+            return
+
         item = session.scalar(select(NewsItem).where(NewsItem.id == news_id))
         if not item or not item.topics:
             return
 
         news_topics = item.topics  # {"politics": 0.9, "military": 0.6}
-        delta = 0.1 if reaction == "like" else -0.1
+        # Accept legacy queued payloads during a rolling deployment.
+        if isinstance(preference_delta, str):
+            preference_delta = 0.1 if preference_delta == "like" else -0.1
 
         topics_to_update = [t for t, s in news_topics.items() if s >= 0.3]
 
@@ -316,7 +368,10 @@ def update_topic_preferences(user_id: int, news_id: int, reaction: str):
             if not pref:
                 pref = UserTopicPreference(user_id=user_id, topic=topic, weight=0.5)
                 session.add(pref)
-            pref.weight = max(0.0, min(1.0, pref.weight + delta * score))
+            pref.weight = max(
+                0.0,
+                min(1.0, pref.weight + preference_delta * score),
+            )
 
         session.commit()
 
