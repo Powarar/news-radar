@@ -1,7 +1,11 @@
 import axios from "axios";
 
+// Vite exposes a defined but empty string when a build arg is passed empty.
+// Treat that the same as a missing value so production always reaches /api.
+const API_BASE_URL = import.meta.env.VITE_API_URL?.trim() || "/api";
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "/api",
+  baseURL: API_BASE_URL,
   withCredentials: true,
 });
 
@@ -52,7 +56,7 @@ api.interceptors.response.use(
 
     try {
       const { data } = await axios.post(
-        `${import.meta.env.VITE_API_URL ?? "/api"}/v1/auth/refresh`,
+        `${API_BASE_URL}/v1/auth/refresh`,
         { refresh_token: refreshToken }
       );
       localStorage.setItem("access_token", data.access_token);

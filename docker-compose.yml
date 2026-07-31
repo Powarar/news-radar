@@ -65,7 +65,7 @@ services:
 
   beat:
     build: ./backend
-    command: celery -A app.workers.celery_app beat --loglevel=info
+    command: celery -A app.workers.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     volumes:
       - ./backend:/app
     env_file: .env
