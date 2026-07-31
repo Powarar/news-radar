@@ -11,8 +11,8 @@ export default defineConfig({
         name: "News Radar",
         short_name: "NewsRadar",
         description: "A focused personal news feed",
-        theme_color: "#111210",
-        background_color: "#111210",
+        theme_color: "#080b10",
+        background_color: "#080b10",
         display: "standalone",
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },

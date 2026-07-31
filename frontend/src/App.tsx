@@ -359,12 +359,8 @@ function FeedPage({ authReady }: { authReady: boolean }) {
     <div style={s.page}>
       <NavBar />
       <main className="page-enter" style={s.feed}>
-        <header style={s.feedHeader}>
-          <div style={s.feedKicker}>
-            <span className="live-dot" /> Сводка обновляется
-          </div>
-          <h1 className="feed-title" style={s.feedTitle}>Главное сейчас</h1>
-          <p style={s.feedSubtitle}>Источники без лишнего шума — в одной ленте.</p>
+        <header className="feed-header glass-panel" style={s.feedHeader}>
+          <h1 className="feed-title" style={s.feedTitle}>News Radar</h1>
         </header>
 
         {!userLoading && !user && <GuestBanner />}
@@ -498,9 +494,9 @@ function ProfilePage() {
               <span style={s.appearanceLabel}>Масштаб</span>
               <div style={s.appearanceControls}>
                 {([
-                  ["compact", "−"],
+                  ["compact", "75%"],
                   ["normal", "100%"],
-                  ["large", "+"],
+                  ["large", "125%"],
                 ] as [UiScale, string][]).map(([value, label]) => (
                   <button
                     key={value}
@@ -730,9 +726,10 @@ const s: Record<string, React.CSSProperties> = {
 
   // Article row — editorial, no card chrome
   card: {
-    padding: "24px 0 24px 18px",
-    borderBottom: "1px solid var(--border)",
-    borderLeft: "2px solid transparent",
+    padding: "22px",
+    marginBottom: 12,
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius)",
   },
   cardThumb: {
     display: "block",
@@ -828,30 +825,13 @@ const s: Record<string, React.CSSProperties> = {
 
   // Sort bar
   feedHeader: {
-    paddingBottom: 24,
-    marginBottom: 18,
-    borderBottom: "1px solid var(--border-strong)",
-  },
-  feedKicker: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    color: "var(--accent)",
-    fontSize: 10,
-    fontWeight: 750,
-    letterSpacing: "0.14em",
-    textTransform: "uppercase" as const,
-    marginBottom: 8,
+    padding: "22px 24px",
+    marginBottom: 14,
   },
   feedTitle: {
-    fontSize: 34,
+    fontSize: 32,
     lineHeight: 1.05,
-    letterSpacing: "-0.045em",
-    marginBottom: 8,
-  },
-  feedSubtitle: {
-    color: "var(--text-muted)",
-    fontSize: 13,
+    letterSpacing: "-0.04em",
   },
   sortBar: {
     display: "flex",

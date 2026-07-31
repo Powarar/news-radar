@@ -1,24 +1,24 @@
 /* Design tokens */
 :root {
-  --bg:           #111210;
-  --bg-card:      #171815;
-  --bg-elevated:  #20211d;
-  --text:         #f0eee7;
-  --text-muted:   #97978f;
-  --text-subtle:  #62635d;
-  --accent:       #ff6249;
-  --accent-hover: #ff7b66;
-  --accent-dim:   rgba(255,98,73,0.11);
+  --bg:           #080b10;
+  --bg-card:      rgba(255,255,255,0.055);
+  --bg-elevated:  rgba(255,255,255,0.085);
+  --text:         #f5f7fa;
+  --text-muted:   #a7adb7;
+  --text-subtle:  #6d7480;
+  --accent:       #b9dcff;
+  --accent-hover: #e2f1ff;
+  --accent-dim:   rgba(185,220,255,0.12);
   --danger:       #e05252;
   --danger-dim:   rgba(224,82,82,0.12);
   --success:      #4caf7d;
   --success-dim:  rgba(76,175,125,0.12);
-  --border:       rgba(240,238,231,0.09);
-  --border-strong: rgba(240,238,231,0.2);
-  --border-hover: rgba(240,238,231,0.18);
-  --radius:       6px;
-  --radius-sm:    4px;
-  --radius-xs:    3px;
+  --border:       rgba(255,255,255,0.11);
+  --border-strong: rgba(255,255,255,0.2);
+  --border-hover: rgba(255,255,255,0.25);
+  --radius:       22px;
+  --radius-sm:    14px;
+  --radius-xs:    10px;
   --ease:         cubic-bezier(0.16, 1, 0.3, 1);
   --font:         -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display: var(--font);
@@ -38,7 +38,11 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 12% -10%, rgba(86, 122, 166, 0.22), transparent 34rem),
+    radial-gradient(circle at 88% 18%, rgba(82, 101, 129, 0.16), transparent 30rem),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font);
   font-size: 15px;
@@ -136,7 +140,7 @@ input[type=range]::-moz-range-thumb {
 
 /* Nav link hover */
 .nav-link:hover {
-  background: rgba(240,238,231,0.05) !important;
+  background: rgba(255,255,255,0.07) !important;
   color: var(--text) !important;
 }
 
@@ -150,20 +154,43 @@ input[type=range]::-moz-range-thumb {
 }
 
 .news-card {
-  transition: border-color 160ms ease, background 160ms ease;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(255,255,255,0.075), rgba(255,255,255,0.025));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 12px 36px rgba(0,0,0,0.18);
+  backdrop-filter: blur(22px) saturate(135%);
+  -webkit-backdrop-filter: blur(22px) saturate(135%);
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
 .news-card:hover {
-  border-left-color: var(--accent) !important;
-  background: rgba(240,238,231,0.018);
+  border-color: var(--border-hover) !important;
+  background: linear-gradient(145deg, rgba(255,255,255,0.095), rgba(255,255,255,0.035));
+  transform: translateY(-1px);
 }
 
-.live-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-dim);
+.glass-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(255,255,255,0.09), rgba(255,255,255,0.025));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 18px 50px rgba(0,0,0,0.2);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+.glass-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, rgba(255,255,255,0.09), transparent 28%);
+}
+
+.feed-title {
+  position: relative;
+  z-index: 1;
 }
 
 @media (max-width: 640px) {
@@ -178,15 +205,17 @@ input[type=range]::-moz-range-thumb {
     height: 54px !important;
     padding: 5px !important;
     border: 1px solid var(--border-strong) !important;
-    border-radius: 8px;
-    background: rgba(23,24,21,0.94) !important;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.38);
+    border-radius: 22px;
+    background: rgba(19,23,30,0.72) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 14px 44px rgba(0,0,0,0.42);
+    backdrop-filter: blur(24px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
   }
 
   .app-nav-logo { display: none !important; }
   .app-nav-links { width: 100%; justify-content: space-around; gap: 0 !important; }
   .nav-link { flex: 1; padding: 7px 4px !important; font-size: 11px !important; }
-  .news-card { padding-left: 12px !important; }
+  .news-card { padding: 18px !important; border-radius: 18px !important; }
   .news-card-image { height: 180px !important; }
 }
 
