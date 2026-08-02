@@ -9,8 +9,8 @@ from app.models.source import Source
 from app.models.user import UserSourceSetting, UserTopicPreference
 
 PERSONALIZED_FEED_MAX_AGE = timedelta(days=3)
-PREFERENCE_SCORE_WEIGHT = 0.9
-FRESHNESS_SCORE_WEIGHT = 0.1
+PREFERENCE_SCORE_WEIGHT = 0.65
+FRESHNESS_SCORE_WEIGHT = 0.35
 
 
 class NewsRepository:
@@ -82,8 +82,9 @@ class NewsRepository:
             prefs = await self.get_user_preferences(user_id)
 
             if prefs:
-                # Normalize preference relevance to 0..1, then add a deliberately
-                # small freshness component. Preferences remain the main signal.
+                # Normalize preference relevance to 0..1 and blend it with a
+                # strong freshness signal so older high-scoring items cannot
+                # indefinitely pin the personalized feed.
                 score_parts = [
                     case(
                         (NewsItem.topics.has_key(topic), weight * cast(NewsItem.topics[topic].as_string(), Float)),

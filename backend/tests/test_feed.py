@@ -253,7 +253,7 @@ class TestRelevanceSort:
 
 
 class TestPersonalizedFreshness:
-    """Personalized feed uses a small freshness bonus and a hard age cutoff."""
+    """Personalized feed gives freshness real weight and has a hard age cutoff."""
 
     async def test_fresh_news_beats_old_news_same_relevance(
         self, client: AsyncClient, db_session: AsyncSession
@@ -296,6 +296,32 @@ class TestPersonalizedFreshness:
         r = await client.get(f"{BASE}/?sort=relevance", headers=auth_headers(user))
         ids = [i["id"] for i in r.json()["items"]]
         assert ids == [preferred.id, merely_fresh.id]
+
+    async def test_fresh_relevant_news_can_displace_old_high_relevance_news(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        now = datetime.now(timezone.utc)
+        user = await make_user(db_session)
+        db_session.add(UserTopicPreference(user_id=user.id, topic="technology", weight=1.0))
+        await db_session.commit()
+
+        src = await make_source(db_session)
+        old_high_relevance = await make_news(
+            db_session,
+            src.id,
+            topics={"technology": 0.9},
+            published_at=now - timedelta(days=2),
+        )
+        fresh_relevant = await make_news(
+            db_session,
+            src.id,
+            topics={"technology": 0.55},
+            published_at=now,
+        )
+
+        r = await client.get(f"{BASE}/?sort=relevance", headers=auth_headers(user))
+        ids = [i["id"] for i in r.json()["items"]]
+        assert ids == [fresh_relevant.id, old_high_relevance.id]
 
     async def test_news_older_than_three_days_is_excluded(
         self, client: AsyncClient, db_session: AsyncSession
