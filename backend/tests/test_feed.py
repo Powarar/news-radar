@@ -365,19 +365,19 @@ class TestReactionPreferenceDelta:
 
         reaction, delta = await repo.add_reaction(user.id, news.id, ReactionType.like)
         assert reaction is not None
-        assert delta == 0.1
+        assert delta == 0.2
 
         reaction, delta = await repo.add_reaction(user.id, news.id, ReactionType.like)
         assert reaction is None
-        assert delta == -0.1
+        assert delta == -0.2
 
         reaction, delta = await repo.add_reaction(user.id, news.id, ReactionType.dislike)
         assert reaction is not None
-        assert delta == -0.1
+        assert delta == -0.2
 
         reaction, delta = await repo.add_reaction(user.id, news.id, ReactionType.like)
         assert reaction is not None
-        assert delta == 0.2
+        assert delta == 0.4
 
 
 # ─── Pagination ────────────────────────────────────────────────────────────────

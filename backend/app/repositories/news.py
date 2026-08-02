@@ -11,6 +11,7 @@ from app.models.user import UserSourceSetting, UserTopicPreference
 PERSONALIZED_FEED_MAX_AGE = timedelta(days=3)
 PREFERENCE_SCORE_WEIGHT = 0.65
 FRESHNESS_SCORE_WEIGHT = 0.35
+REACTION_PREFERENCE_STEP = 0.2
 
 
 class NewsRepository:
@@ -245,7 +246,7 @@ class NewsRepository:
     @staticmethod
     def _reaction_effect(reaction: ReactionType) -> float:
         """Base preference delta before multiplying by a topic confidence."""
-        return 0.1 if reaction == ReactionType.like else -0.1
+        return REACTION_PREFERENCE_STEP if reaction == ReactionType.like else -REACTION_PREFERENCE_STEP
 
     def _serialize(self, news: NewsItem, source: Source, reaction: str | None = None, likes_count: int = 0, dislikes_count: int = 0) -> dict:
         return {
