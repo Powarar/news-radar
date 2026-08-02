@@ -107,7 +107,7 @@ async def telegram_login(
 @router.post("/exchange", response_model=TokenResponse)
 async def exchange_oauth_code(
     data: OAuthCodeRequest,
-    service: Annotated[AuthService, Depends(get_auth_service)],ч
+    service: Annotated[AuthService, Depends(get_auth_service)],
 ):
     return await service.exchange_oauth_code(data.code)
 
