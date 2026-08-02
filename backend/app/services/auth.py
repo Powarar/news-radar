@@ -129,29 +129,6 @@ class AuthService:
 
         return self._make_tokens(user.id)
 
-    async def telegram_magic_link(self, telegram_id: str) -> str:
-        user = await self.repo.get_by_telegram_id(telegram_id)
-
-        if not user:
-            username = f"tg_{telegram_id}"
-            if await self.repo.get_by_username(username):
-                username = f"{username}_{telegram_id[:6]}"
-            user = await self.repo.create_telegram(username, telegram_id)
-
-        if not user.is_active:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
-
-        tokens = self._make_tokens(user.id)
-        code = secrets.token_hex(32)
-
-        await redis.set(
-            f"oauth_code:{code}",
-            json.dumps({"access_token": tokens.access_token, "refresh_token": tokens.refresh_token}),
-            ex=settings.oauth_code_ttl,
-        )
-
-        return code
-
     async def exchange_oauth_code(self, code: str) -> TokenResponse:
         # GETDEL is atomic: two concurrent exchanges cannot redeem one code twice.
         raw = await redis.getdel(f"oauth_code:{code}")

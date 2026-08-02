@@ -299,7 +299,6 @@ Celery `task_routes` отправляет задачи уведомлений в
 | **Email + пароль** | Регистрация/логин, JWT access (24ч) + refresh (30д) |
 | **Google OAuth** | OAuth 2.0 flow, PKCE |
 | **Telegram Web App** | Mini App с initData, подпись через HMAC |
-| **Telegram Magic Link** | Бот → одноразовый код в Redis → обмен на токены |
 
 ### Refresh token
 
