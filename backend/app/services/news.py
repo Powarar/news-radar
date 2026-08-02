@@ -9,7 +9,6 @@ class NewsService:
         self.repo = NewsRepository(db)
 
     async def react(self, user_id: int, news_id: int, reaction: ReactionType) -> NewsReaction | None:
-        # LookupError от репозитория не ловим — пусть всплывает в route
         result, preference_delta = await self.repo.add_reaction(user_id, news_id, reaction)
 
         if preference_delta:

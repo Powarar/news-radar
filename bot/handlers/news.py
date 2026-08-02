@@ -34,11 +34,6 @@ async def cmd_start(message: Message):
     )
 
 
-@router.message(Command("malayatokmachka"))
-async def cmd_malayatokmachka(message: Message):
-    await message.answer("⚡️Сегодня Малая Токмачка не взята")
-
-
 @router.message(Command("top"))
 async def cmd_top(message: Message, http_client: httpx.AsyncClient):
     response = await http_client.get("/api/v1/news/", params={"limit": 5})

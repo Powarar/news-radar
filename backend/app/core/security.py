@@ -93,11 +93,9 @@ def verify_telegram_hash(data: dict) -> bool:
     if not received_hash:
         return False
 
-    # принимаем только свежие данные — не старше 10 минут
     if not _is_recent_auth_date(data.get("auth_date")):
         return False
 
-    # все поля кроме hash, отсортированные, каждое на новой строке
     check_string = "\n".join(
         f"{k}={v}" for k, v in sorted(data.items()) if k != "hash"
     )

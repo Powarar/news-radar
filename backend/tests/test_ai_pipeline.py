@@ -115,6 +115,6 @@ def test_network_errors_use_exponential_backoff(monkeypatch):
 
     topics, summary, status = pipeline.process("Test article")
 
-    assert fake.calls == 4
-    assert sleeps == [1.0, 2.0, 4.0]
+    assert fake.calls == 3
+    assert sleeps == [1.0, 2.0]
     assert (topics, summary, status) == ({}, None, "failed")

@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 _MAX_CHARS = 1500
 _GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 _MODEL = "llama-3.1-8b-instant"
-_MAX_RETRIES = 3
+# Two retries plus the initial request: at most three Groq calls per task run.
+_MAX_RETRIES = 2
 _BACKOFF_BASE = 2.0
 _MIN_RETRY_AFTER = 1.0
 _MAX_RETRY_AFTER = 60.0

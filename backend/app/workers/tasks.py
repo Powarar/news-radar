@@ -236,7 +236,8 @@ def fetch_website(source_id: int):
 @celery_app.task(
     name="app.workers.tasks.process_news_ai",
     bind=True,
-    max_retries=3,
+    # Two retries plus the initial execution: at most three full task runs.
+    max_retries=2,
 )
 def process_news_ai(self, news_id: int, force: bool = False, notify: bool = True):
     """Classify topics and generate a summary, retrying failed Groq runs."""

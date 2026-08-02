@@ -6,8 +6,6 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 import app.models.news
 import app.models.source
-
-# import all models so Alembic detects them
 import app.models.user  # noqa: F401
 from alembic import context
 from app.core.config import settings
