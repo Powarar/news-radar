@@ -88,7 +88,7 @@ def fetch_news_context(
             score_threshold=score_threshold,
             limit=limit,
         ).points
-    except Exception as e:
+    except Exception as e: # noqa: BLE001
         logger.error("Qdrant search error: %s", e)
         return None, 0
 
