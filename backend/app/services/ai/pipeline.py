@@ -1,6 +1,7 @@
 """
 Unified AI pipeline — classify topics AND summarize in one Groq call.
-Falls back to keyword classifier if Groq is unavailable; summary is skipped on fallback.
+Falls back through free LLMs, and finally to keyword classifier if all fail;
+summary is skipped on total fallback.
 """
 
 import logging
@@ -18,8 +19,14 @@ logger = logging.getLogger(__name__)
 
 _MAX_CHARS = 1500
 _GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-_MODEL = "llama-3.1-8b-instant"
-# Two retries plus the initial request: at most three Groq calls per task run.
+
+_MODELS_FALLBACK = [
+    "llama-3.1-8b-instant",       # Основная: 14.4K RPD
+    "allam-2-7b",                 # Резерв 1: 7K RPD
+    "qwen/qwen3.6-27b",           # Резерв 2: 1K RPD
+    "openai/gpt-oss-20b",         # Резерв 3: 1K RPD
+]
+
 _MAX_RETRIES = 2
 _BACKOFF_BASE = 2.0
 _MIN_RETRY_AFTER = 1.0
@@ -137,8 +144,8 @@ def process(text: str, news_id: int | None = None) -> tuple[dict[str, float], st
     """Return (topics, summary, status). status ∈ {"ok", "skipped", "failed"}.
 
     One Groq call for both classify and summarize.
-    Retries 429 with exponential backoff. Falls back to keyword classifier
-    if Groq is unavailable; summary is None on fallback.
+    Iterates through _MODELS_FALLBACK on rate limits (429) or errors.
+    Falls back to keyword classifier if all Groq models are unavailable.
     """
     if not text or not text.strip():
         return {}, None, "skipped"
@@ -148,74 +155,72 @@ def process(text: str, news_id: int | None = None) -> tuple[dict[str, float], st
 
     truncated = _soft_truncate(text, _MAX_CHARS)
     label = f"news_id={news_id}" if news_id is not None else "caller=unknown"
+    content = None
 
-    for attempt in range(_MAX_RETRIES + 1):
-        try:
-            client = _get_client()
-            resp = client.post(
-                _GROQ_URL,
-                headers={
-                    "Authorization": f"Bearer {settings.groq_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": _MODEL,
-                    "messages": [
-                        {"role": "system", "content": _SYSTEM_PROMPT},
-                        {"role": "user", "content": truncated},
-                    ],
-                    "temperature": 0,
-                    "max_tokens": 300,
-                    "response_format": {"type": "json_object"},
-                },
-            )
+    for model_name in _MODELS_FALLBACK:
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                client = _get_client()
+                resp = client.post(
+                    _GROQ_URL,
+                    headers={
+                        "Authorization": f"Bearer {settings.groq_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": _SYSTEM_PROMPT},
+                            {"role": "user", "content": truncated},
+                        ],
+                        "temperature": 0,
+                        "max_tokens": 300,
+                        "response_format": {"type": "json_object"},
+                    },
+                )
 
-            if resp.status_code == 429:
-                retry_after = _parse_retry_after(resp)
-                if attempt < _MAX_RETRIES:
-                    logger.info(
-                        "Pipeline rate-limited (attempt %d/%d), sleeping %.1fs [%s]",
-                        attempt + 1, _MAX_RETRIES + 1, retry_after, label,
+                if resp.status_code == 429:
+                    retry_after = _parse_retry_after(resp)
+                    if attempt < _MAX_RETRIES:
+                        logger.info(
+                            "Model %s rate-limited (attempt %d/%d), sleeping %.1fs [%s]",
+                            model_name, attempt + 1, _MAX_RETRIES + 1, retry_after, label,
+                        )
+                        time.sleep(retry_after)
+                        continue
+                    logger.warning(
+                        "Model %s rate-limited after retries, switching to fallback model... [%s]",
+                        model_name, label,
                     )
-                    time.sleep(retry_after)
+                    break  
+
+                if resp.status_code != 200:
+                    logger.warning(
+                        "Model %s HTTP %d: %.300s [%s]",
+                        model_name, resp.status_code, resp.text[:300], label,
+                    )
+                    break
+
+                content = resp.json()["choices"][0]["message"]["content"].strip()
+                break 
+
+            except httpx.HTTPError as e:
+                if attempt < _MAX_RETRIES:
+                    wait = _BACKOFF_BASE ** attempt
+                    time.sleep(wait)
                     continue
-                logger.warning(
-                    "Pipeline: rate-limited after %d retries [%s]",
-                    _MAX_RETRIES + 1, label,
-                )
-                return classify_keywords(text), None, "failed"
+                logger.warning("Network error with model %s: %s [%s]", model_name, e, label)
+                break
+            except (KeyError, IndexError, ValueError) as e:
+                logger.warning("Malformed response from model %s: %s [%s]", model_name, e, label)
+                break
 
-            if resp.status_code != 200:
-                logger.warning(
-                    "Pipeline HTTP %d: %.300s [%s]",
-                    resp.status_code, resp.text[:300], label,
-                )
-                return classify_keywords(text), None, "failed"
+        if content:
+            break  
 
-            content = resp.json()["choices"][0]["message"]["content"].strip()
-            break  # success — exit retry loop
-
-        except httpx.HTTPError as e:
-            if attempt < _MAX_RETRIES:
-                wait = _BACKOFF_BASE ** attempt
-                logger.info(
-                    "Pipeline retry %d/%d after: %s (%.1fs) [%s]",
-                    attempt + 1, _MAX_RETRIES, e, wait, label,
-                )
-                time.sleep(wait)
-                continue
-            logger.warning(
-                "Pipeline network error after %d retries: %s [%s]",
-                _MAX_RETRIES + 1, e, label,
-            )
-            return classify_keywords(text), None, "failed"
-
-        except (KeyError, IndexError, ValueError) as e:
-            logger.warning("Pipeline malformed response: %s [%s]", e, label)
-            return classify_keywords(text), None, "failed"
-    else:
-        # exhausted retries without success
-        logger.error("Pipeline: exhausted retries [%s]", label)
+    if not content:
+        
+        logger.error("Pipeline: all Groq models failed or rate-limited [%s]", label)
         return classify_keywords(text), None, "failed"
 
     try:

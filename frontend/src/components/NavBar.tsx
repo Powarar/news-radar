@@ -21,22 +21,27 @@ function RadarIcon() {
 export default function NavBar() {
   const { pathname } = useLocation();
   return (
-    <nav className="app-nav" style={s.nav}>
-      <Link className="app-nav-logo" to="/feed" style={s.navLogo}>
+    <>
+      <Link className="mobile-app-brand" to="/feed" style={s.mobileBrand}>
         <span style={s.navLogoMark}><RadarIcon /></span> News Radar
       </Link>
-      <div className="app-nav-links" style={s.navLinks}>
-        {NAV_LINKS.map(({ to, label }) => {
-          const active = pathname === to || (to !== "/feed" && pathname.startsWith(to));
-          return (
-            <Link key={to} to={to} className="nav-link" style={{ ...s.navLink, ...(active ? s.navLinkActive : {}) }}>
-              {label}
-              {active && <span className="nav-dot" style={s.navLinkDot} aria-hidden="true" />}
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+      <nav className="app-nav" style={s.nav}>
+        <Link className="app-nav-logo" to="/feed" style={s.navLogo}>
+          <span style={s.navLogoMark}><RadarIcon /></span> News Radar
+        </Link>
+        <div className="app-nav-links" style={s.navLinks}>
+          {NAV_LINKS.map(({ to, label }) => {
+            const active = pathname === to || (to !== "/feed" && pathname.startsWith(to));
+            return (
+              <Link key={to} to={to} className="nav-link" style={{ ...s.navLink, ...(active ? s.navLinkActive : {}) }}>
+                {label}
+                {active && <span className="nav-dot" style={s.navLinkDot} aria-hidden="true" />}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </>
   );
 }
 
@@ -65,6 +70,16 @@ const s: Record<string, CSSProperties> = {
     color: "var(--text)",
     textDecoration: "none",
     letterSpacing: "-0.01em",
+  },
+  mobileBrand: {
+    display: "none",
+    alignItems: "center",
+    gap: 7,
+    color: "var(--text)",
+    fontSize: 16,
+    fontWeight: 700,
+    letterSpacing: "-0.01em",
+    textDecoration: "none",
   },
   navLogoMark: { color: "var(--accent)", fontSize: 18 },
   navLinks: { display: "flex", gap: 4 },

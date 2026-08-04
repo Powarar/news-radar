@@ -362,10 +362,6 @@ function FeedPage({ authReady }: { authReady: boolean }) {
     <div style={s.page}>
       <NavBar />
       <main className="page-enter" style={s.feed}>
-        <header className="feed-header glass-panel" style={s.feedHeader}>
-          <h1 className="feed-title" style={s.feedTitle}>News Radar</h1>
-        </header>
-
         {!userLoading && !user && <GuestBanner />}
 
         <div style={s.sortBar}>
@@ -827,15 +823,6 @@ const s: Record<string, React.CSSProperties> = {
   },
 
   // Sort bar
-  feedHeader: {
-    padding: "22px 24px",
-    marginBottom: 14,
-  },
-  feedTitle: {
-    fontSize: 32,
-    lineHeight: 1.05,
-    letterSpacing: "-0.04em",
-  },
   sortBar: {
     display: "flex",
     gap: 6,

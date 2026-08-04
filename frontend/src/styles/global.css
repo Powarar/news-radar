@@ -53,7 +53,7 @@ body {
 }
 
 button, input, select, textarea { font-family: inherit; }
-h1, h2, h3, .feed-title { font-family: var(--font-display); }
+h1, h2, h3 { font-family: var(--font-display); }
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); }
@@ -188,13 +188,21 @@ input[type=range]::-moz-range-thumb {
   background: linear-gradient(115deg, rgba(255,255,255,0.09), transparent 28%);
 }
 
-.feed-title {
-  position: relative;
-  z-index: 1;
-}
-
 @media (max-width: 640px) {
   body { padding-bottom: 64px; }
+
+  .mobile-app-brand {
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    display: flex !important;
+    height: 48px;
+    padding: 0 18px;
+    background: rgba(10,13,18,0.78);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+  }
 
   .app-nav {
     position: fixed !important;
