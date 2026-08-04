@@ -1,7 +1,7 @@
 
 import httpx
 from bs4 import BeautifulSoup
-
+import asyncio
 
 async def parse_telegram_channel(channel: str, limit: int = 10) -> list[dict]:
     url = f"https://t.me/s/{channel}"
@@ -35,9 +35,6 @@ async def parse_telegram_channel(channel: str, limit: int = 10) -> list[dict]:
 
     return results
 
-
-# Запуск
-import asyncio
 
 
 async def main():

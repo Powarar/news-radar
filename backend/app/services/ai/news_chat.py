@@ -1,6 +1,7 @@
+# Замени самые верхние строчки файла на эти:
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from pydantic import BaseModel, ConfigDict
