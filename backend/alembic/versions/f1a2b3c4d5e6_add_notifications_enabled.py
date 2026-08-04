@@ -5,7 +5,6 @@ Revises: e7a1b2c3d4f5
 Create Date: 2026-05-24
 """
 import sqlalchemy as sa
-
 from alembic import op
 
 revision = "f1a2b3c4d5e6"

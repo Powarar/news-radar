@@ -12,7 +12,6 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 from dotenv import load_dotenv
-
 from handlers import news, settings
 
 load_dotenv()

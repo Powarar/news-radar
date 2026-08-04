@@ -1,6 +1,5 @@
-from sqlalchemy import select
-
 from app.models.user import User
+from sqlalchemy import select
 
 USER = {
     "email": "source-admin@example.com",

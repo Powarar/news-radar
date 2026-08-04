@@ -8,16 +8,18 @@
 Idempotent — повторный запуск не создаёт дубликатов.
 """
 import sys
+
 sys.path.insert(0, "/app")
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
+import json
+
 from app.core.config import settings
-from app.models.user import User  # noqa: F401
 from app.models.news import NewsItem  # noqa: F401
 from app.models.source import Source, SourceType
+from app.models.user import User  # noqa: F401
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
-import json
 
 def tg(name, username, topics=None, country="RU"):
     return {

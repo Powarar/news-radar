@@ -1,6 +1,7 @@
+
 import httpx
 from bs4 import BeautifulSoup
-import json
+
 
 async def parse_telegram_channel(channel: str, limit: int = 10) -> list[dict]:
     url = f"https://t.me/s/{channel}"
@@ -37,6 +38,7 @@ async def parse_telegram_channel(channel: str, limit: int = 10) -> list[dict]:
 
 # Запуск
 import asyncio
+
 
 async def main():
     posts = await parse_telegram_channel("meduzalive", limit=3)

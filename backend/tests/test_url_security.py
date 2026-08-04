@@ -1,5 +1,4 @@
 import pytest
-
 from app.core.url_security import validate_public_http_url
 
 

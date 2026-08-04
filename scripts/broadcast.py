@@ -9,6 +9,7 @@
     docker compose exec backend python /app/scripts/broadcast.py "Текст" --subscribed
 """
 import sys
+
 import httpx
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -16,9 +17,9 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, "/app")
 
 from app.core.config import settings
-from app.models.user import User
 from app.models.news import NewsItem, NewsReaction  # noqa: F401
 from app.models.source import Source  # noqa: F401
+from app.models.user import User
 
 
 def main():
