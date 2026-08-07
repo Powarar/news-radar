@@ -5,6 +5,7 @@ import { User, NewsItem } from "./types";
 import NavBar from "./components/NavBar";
 import PreferencesPage from "./components/PreferencesPage";
 import SourcesPage from "./components/SourcesPage";
+import ChatPage from "./components/ChatPage";
 import { TOPIC_LABELS, TOPIC_COLORS } from "./constants";
 import {
   readAppearance,
@@ -576,6 +577,7 @@ function LoginPage() {
   function saveTokens(data: { access_token: string; refresh_token: string }) {
     localStorage.setItem("access_token", data.access_token);
     localStorage.setItem("refresh_token", data.refresh_token);
+    window.dispatchEvent(new Event("news-radar-auth-changed"));
     navigate("/feed");
   }
 
@@ -679,6 +681,9 @@ function LoginPage() {
         <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
           <TelegramWidget onAuth={handleTelegramAuth} />
         </div>
+        <Link to="/feed" style={{ marginTop: 16, color: "var(--text-muted)", fontSize: 13, textDecoration: "underline" }}>
+          Продолжить без регистрации (как гость)
+        </Link>
       </div>
     </div>
   );
@@ -1167,6 +1172,7 @@ export default function App() {
       <Route path="/feed" element={<FeedPage authReady={authReady} />} />
       <Route path="/preferences" element={<PreferencesPage />} />
       <Route path="/sources" element={<SourcesPage />} />
+      <Route path="/chat" element={<ChatPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />

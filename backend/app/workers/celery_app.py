@@ -19,6 +19,7 @@ celery_app.conf.task_routes = {
     "app.workers.tasks.send_single_notification":   {"queue": "notifications"},
     "app.workers.tasks.update_topic_preferences":   {"queue": "preferences"},
     "app.workers.tasks.reprocess_news_ai":           {"queue": "ai"},
+    "app.workers.tasks.index_news_vector":          {"queue": "ai"},
 }
 
 celery_app.conf.update(

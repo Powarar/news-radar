@@ -32,6 +32,13 @@ services:
       timeout: 5s
       retries: 5
 
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    restart: always
+    volumes:
+      - qdrant_data:/qdrant/storage
+    logging: *default-logging
+
   backend:
     build: ./backend
     image: news-radar-backend:latest
@@ -42,6 +49,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      qdrant:
+        condition: service_started
     restart: always
     logging: *default-logging
     healthcheck:
@@ -162,3 +171,4 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  qdrant_data:

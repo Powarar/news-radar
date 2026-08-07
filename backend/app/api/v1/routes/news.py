@@ -57,3 +57,18 @@ async def post_reaction(
     await service.react(user.id, news_id, body.reaction)
     counts = await repo.get_reaction_counts(news_id)
     return counts
+
+
+from pydantic import BaseModel
+from app.services.ai.news_chat import answer_news_query, ChatResponse
+
+class ChatRequest(BaseModel):
+    query: str
+    days: int = 3
+
+@router.post("/chat", response_model=ChatResponse)
+def chat_with_news(
+    body: ChatRequest,
+    user: CurrentUser,
+):
+    return answer_news_query(body.query, days=body.days)

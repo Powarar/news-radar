@@ -1,9 +1,10 @@
+import json
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-def score_importance(topic_scores: dict[str, float], historical_topics: list[dict] | None = None) -> float:
+def score_importance(topic_scores: dict[str, float] | str | None, historical_topics: list[dict | str] | None = None) -> float:
     """0.0–1.0 based on percentile rank among recent news.
 
     For each topic in this article we ask: what % of recent articles
@@ -14,7 +15,13 @@ def score_importance(topic_scores: dict[str, float], historical_topics: list[dic
     doesn't automatically dominate — only unusually high confidence
     for ITS topic is treated as important.
     """
-    if not topic_scores:
+    if isinstance(topic_scores, str):
+        try:
+            topic_scores = json.loads(topic_scores)
+        except Exception:
+            topic_scores = None
+
+    if not topic_scores or not isinstance(topic_scores, dict):
         return 0.0
 
     if not historical_topics:
@@ -25,6 +32,13 @@ def score_importance(topic_scores: dict[str, float], historical_topics: list[dic
     hist: dict[str, list[float]] = {}
     for row in historical_topics:
         if not row:
+            continue
+        if isinstance(row, str):
+            try:
+                row = json.loads(row)
+            except Exception:
+                continue
+        if not isinstance(row, dict):
             continue
         for topic, score in row.items():
             if isinstance(score, (int, float)):

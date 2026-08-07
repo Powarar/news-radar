@@ -2,6 +2,7 @@ import logging
 from collections import defaultdict
 
 import httpx
+import redis as redis_sync
 from sqlalchemy import create_engine, or_, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 engine = create_engine(settings.database_url_sync, poolclass=NullPool)
 SyncSessionLocal = sessionmaker(engine)
+sync_redis = redis_sync.Redis.from_url(settings.redis_url)
 
 _tg_client: httpx.Client | None = None
 
@@ -238,6 +240,7 @@ def fetch_website(source_id: int):
     bind=True,
     # Two retries plus the initial execution: at most three full task runs.
     max_retries=2,
+    rate_limit="15/m",
 )
 def process_news_ai(self, news_id: int, force: bool = False, notify: bool = True):
     """Classify topics and generate a summary, retrying failed Groq runs."""
@@ -291,8 +294,52 @@ def process_news_ai(self, news_id: int, force: bool = False, notify: bool = True
         news.importance_score = score_importance(topics, history)
         session.commit()
 
+        if status == "ok":
+            index_news_vector.delay(news_id)
+
         if topics and notify:
             send_notifications.delay(news_id)
+
+
+# ─────────────────────────────────────────────────────────────
+#  index_news_vector — векторизация и сохранение в Qdrant
+# ─────────────────────────────────────────────────────────────
+
+@celery_app.task(
+    name="app.workers.tasks.index_news_vector",
+    rate_limit="1/s",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=3,
+)
+def index_news_vector(news_id: int):
+    """Генерация эмбеддинга новости и индексирование в Qdrant по очереди (Redis Lock)."""
+    lock = sync_redis.lock("lock:news_embedding", timeout=60, blocking_timeout=15)
+    acquired = False
+    try:
+        acquired = lock.acquire()
+        if not acquired:
+            logger.warning("Could not acquire embedding lock for news_id=%d, retrying", news_id)
+            raise index_news_vector.retry(countdown=5)
+
+        from app.services.ai.embedding import index_news_to_qdrant
+        with SyncSessionLocal() as session:
+            news = session.get(NewsItem, news_id)
+            if not news or news.ai_status != "ok":
+                return
+
+            title = news.title or ""
+            text = news.body or ""
+            published_timestamp = int(
+                (news.published_at or news.created_at).timestamp()
+            )
+            index_news_to_qdrant(news.id, title, text, news.summary, published_timestamp)
+    finally:
+        if acquired:
+            try:
+                lock.release()
+            except Exception:
+                pass
 
 
 # ─────────────────────────────────────────────────────────────

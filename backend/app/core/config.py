@@ -63,6 +63,8 @@ class Settings(BaseSettings):
     # Groq
     groq_api_key: str = ""
     groq_api_timeout: int = 30
+    # Qdrant
+    qdrant_host: str = "qdrant"
 
 
 settings = Settings()
