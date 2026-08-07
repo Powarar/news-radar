@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from app.core.config import settings
 from app.models.news import NewsItem
 from app.models.source import Source, SourceType
-from app.models.user import User
+from app.models.user import User  # noqa: F401
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 

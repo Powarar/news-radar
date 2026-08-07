@@ -1,4 +1,6 @@
 from typing import Annotated
+from pydantic import BaseModel
+from app.services.ai.news_chat import answer_news_query, ChatResponse
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,8 +61,6 @@ async def post_reaction(
     return counts
 
 
-from pydantic import BaseModel
-from app.services.ai.news_chat import answer_news_query, ChatResponse
 
 class ChatRequest(BaseModel):
     query: str

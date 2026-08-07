@@ -1,8 +1,6 @@
 import json
-from datetime import datetime, timezone
-import pytest
 from app.services.ai import news_chat
-from app.services.ai.news_chat import ChatResponse, fetch_news_context, answer_news_query
+from app.services.ai.news_chat import fetch_news_context, answer_news_query
 
 
 class FakePoint:
