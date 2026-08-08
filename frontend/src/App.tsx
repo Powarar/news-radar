@@ -565,7 +565,7 @@ function TelegramWidget({ onAuth }: { onAuth: (data: object) => void }) {
     document.getElementById("tg-widget")?.appendChild(script);
     return () => { delete (window as any).onTelegramAuth; };
   }, []);
-  return <div id="tg-widget" />;
+  return <div id="tg-widget" className="telegram-login-widget" style={s.telegramWidget} />;
 }
 
 // ─── LoginPage ────────────────────────────────────────────────────────────────
@@ -683,11 +683,12 @@ function LoginPage() {
           </svg>
           Войти через Google
         </a>
-        <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
+        <div style={s.telegramLoginWrap}>
           <TelegramWidget onAuth={handleTelegramAuth} />
         </div>
-        <Link to="/feed" style={{ marginTop: 16, color: "var(--text-muted)", fontSize: 13, textDecoration: "underline" }}>
-          Продолжить без регистрации (как гость)
+        <Link to="/feed" style={s.guestBtn}>
+          <span>Продолжить как гость</span>
+          <span style={s.guestBtnHint}>без персональной ленты</span>
         </Link>
       </div>
     </div>
@@ -1164,6 +1165,40 @@ const s: Record<string, React.CSSProperties> = {
     width: "100%",
     justifyContent: "center",
     transition: "border-color 150ms ease",
+  },
+  telegramLoginWrap: {
+    width: "100%",
+    height: 42,
+  },
+  telegramWidget: {
+    width: "100%",
+    height: "100%",
+    borderRadius: "var(--radius-sm)",
+    overflow: "hidden",
+  },
+  guestBtn: {
+    width: "100%",
+    marginTop: 2,
+    padding: "10px 14px",
+    border: "1px solid transparent",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text-muted)",
+    background: "transparent",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 600,
+    textAlign: "center" as const,
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    lineHeight: 1.35,
+    transition: "background 150ms ease, color 150ms ease",
+  },
+  guestBtnHint: {
+    marginTop: 2,
+    color: "var(--text-subtle)",
+    fontSize: 11,
+    fontWeight: 400,
   },
 };
 
