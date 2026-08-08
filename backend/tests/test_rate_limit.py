@@ -1,5 +1,5 @@
 import pytest
-from app.core.rate_limit import RateLimiter, _client_ip
+from app.core.rate_limit import RateLimiter, UserDailyQuota, _client_ip
 from fastapi import HTTPException
 from starlette.requests import Request
 
@@ -28,6 +28,20 @@ async def test_rate_limiter_rejects_request_at_limit(mock_redis, monkeypatch):
 
     assert exc.value.status_code == 429
     assert exc.value.headers == {"Retry-After": "60"}
+
+
+@pytest.mark.asyncio
+async def test_user_daily_quota_rejects_fourth_chat_request(mock_redis, monkeypatch):
+    mock_redis.eval.return_value = 4
+    monkeypatch.setattr("app.core.rate_limit.redis", mock_redis)
+    quota = UserDailyQuota(resource="news-chat", max_requests=3)
+
+    with pytest.raises(HTTPException) as exc:
+        await quota.consume(user_id=42)
+
+    assert exc.value.status_code == 429
+    assert "Daily limit reached: 3" in exc.value.detail
+    assert mock_redis.eval.await_count == 1
 
 
 def test_proxy_header_used_only_when_trusted(monkeypatch):

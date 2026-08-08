@@ -212,10 +212,9 @@ def test_chat_api_endpoint(monkeypatch):
     
     # Call endpoint directly
     req = ChatRequest(query="что нового", days=3)
-    resp = chat_with_news(req, user=None)
+    resp = chat_with_news(req, user=None, _quota=None)
     
     assert resp.answer == "Ответ на: что нового"
     assert resp.sources_count == 1
     assert resp.status == "ok"
-
 

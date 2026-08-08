@@ -75,6 +75,10 @@ export default function ChatPage() {
         navigate("/login");
         return;
       }
+      if (err.response?.status === 429) {
+        setError("Дневной лимит — 3 запроса. Попробуйте снова завтра.");
+        return;
+      }
       setError("Не удалось получить ответ. Попробуйте еще раз.");
     } finally {
       setLoading(false);

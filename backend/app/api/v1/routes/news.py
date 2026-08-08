@@ -1,14 +1,15 @@
 from typing import Annotated
-from pydantic import BaseModel
-from app.services.ai.news_chat import answer_news_query, ChatResponse
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import CurrentUser, OptionalUser
 from app.core.database import get_db
+from app.core.rate_limit import UserDailyQuota
 from app.repositories.news import NewsRepository
 from app.schemas.news import NewsReactionRequest
+from app.services.ai.news_chat import ChatResponse, answer_news_query
 from app.services.news import NewsService
 
 router = APIRouter()
@@ -63,12 +64,23 @@ async def post_reaction(
 
 
 class ChatRequest(BaseModel):
-    query: str
-    days: int = 3
+    query: str = Field(min_length=1, max_length=1_000)
+    days: int = Field(default=3, ge=1, le=7)
+
+
+chat_daily_quota = UserDailyQuota(resource="news-chat", max_requests=3)
+
+
+async def enforce_chat_daily_quota(user: CurrentUser) -> None:
+    await chat_daily_quota.consume(user.id)
+
+
+ChatQuotaDep = Annotated[None, Depends(enforce_chat_daily_quota)]
 
 @router.post("/chat", response_model=ChatResponse)
 def chat_with_news(
     body: ChatRequest,
     user: CurrentUser,
+    _quota: ChatQuotaDep,
 ):
     return answer_news_query(body.query, days=body.days)

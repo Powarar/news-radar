@@ -1,5 +1,6 @@
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, Request, status
 
@@ -17,6 +18,18 @@ redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[1])
 local count = redis.call('ZCARD', KEYS[1])
 redis.call('ZADD', KEYS[1], ARGV[2], ARGV[3])
 redis.call('EXPIRE', KEYS[1], ARGV[4])
+return count
+"""
+
+# Fixed daily window is deliberate here: product requirement is a small,
+# understandable allowance (three chat requests per UTC day), not a generic
+# anti-abuse sliding window. INCR and EXPIRE run in one Redis script, so two
+# concurrent requests cannot both consume the same remaining slot.
+_DAILY_QUOTA_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
 return count
 """
 
@@ -64,4 +77,31 @@ class RateLimiter:
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many requests. Try again later.",
                 headers={"Retry-After": str(self.window_seconds)},
+            )
+
+
+class UserDailyQuota:
+    """Fixed daily request quota for an authenticated user, backed by Redis."""
+
+    def __init__(self, resource: str, max_requests: int):
+        self.resource = resource
+        self.max_requests = max_requests
+
+    async def consume(self, user_id: int) -> None:
+        now = datetime.now(timezone.utc)
+        tomorrow = (now + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        ttl_seconds = max(1, int((tomorrow - now).total_seconds()))
+        key = f"quota:{self.resource}:{user_id}:{now.date().isoformat()}"
+        count = await redis.eval(_DAILY_QUOTA_SCRIPT, 1, key, ttl_seconds)
+
+        if count > self.max_requests:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    f"Daily limit reached: {self.max_requests} requests. "
+                    "Try again tomorrow."
+                ),
+                headers={"Retry-After": str(ttl_seconds)},
             )
