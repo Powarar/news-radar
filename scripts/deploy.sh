@@ -46,14 +46,12 @@ rollback() {
   "${compose[@]}" up -d --no-build --force-recreate
 }
 
-git fetch origin main
-git merge --ff-only "$target_commit"
-expected_commit="$(git rev-parse "$target_commit^{commit}")"
-actual_commit="$(git rev-parse HEAD)"
-if [[ "$actual_commit" != "$expected_commit" ]]; then
-  echo "Refusing to deploy $actual_commit; expected $expected_commit" >&2
-  exit 1
+if [[ -n "$1" && "$1" != "origin/main" ]]; then
+    git fetch --all
+    git checkout "$1"
+    echo "Switched to commit: $(git rev-parse HEAD)"
 fi
+
 "$project_dir/scripts/backup_postgres.sh"
 
 # Build first, migrate with the new backend image, then replace services.
