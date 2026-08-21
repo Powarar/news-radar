@@ -75,7 +75,7 @@ def fetch_news_context(
 
     try:
         results = qdrant.query_points(
-            collection_name="news_feed",
+            collection_name=settings.qdrant_collection_name,
             query=query_vector,
             query_filter=Filter(
                 must=[

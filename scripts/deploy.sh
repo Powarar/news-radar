@@ -46,6 +46,18 @@ rollback() {
   "${compose[@]}" up -d --no-build --force-recreate
 }
 
+embedding_diagnostics() {
+  local container_id
+  container_id="$("${compose[@]}" ps -a -q embedding-service)"
+  "${compose[@]}" ps >&2
+  if [[ -n "$container_id" ]]; then
+    docker inspect --format \
+      'embedding state={{.State.Status}} exit={{.State.ExitCode}} oom_killed={{.State.OOMKilled}} restarts={{.RestartCount}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+      "$container_id" >&2 || true
+  fi
+  "${compose[@]}" logs --tail=200 embedding-service >&2 || true
+}
+
 if [[ -n "$1" && "$1" != "origin/main" ]]; then
     git fetch --all
     git checkout "$1"
@@ -57,9 +69,33 @@ fi
 # Build first, migrate with the new backend image, then replace services.
 "${compose[@]}" build
 "${compose[@]}" run --rm backend alembic upgrade head
+
+# Start the memory-heavy model independently so a failure is attributed to the
+# embedding container instead of being hidden as a backend dependency error.
+"${compose[@]}" up -d --no-deps embedding-service
+embedding_ready=false
+for attempt in $(seq 1 90); do
+  container_id="$("${compose[@]}" ps -a -q embedding-service)"
+  health_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || true)"
+  if [[ "$health_status" == "healthy" ]]; then
+    embedding_ready=true
+    break
+  fi
+  if [[ "$health_status" == "unhealthy" || "$health_status" == "exited" || "$health_status" == "dead" ]]; then
+    break
+  fi
+  echo "Waiting for embedding service ($attempt/90, status=${health_status:-unknown})"
+  sleep 5
+done
+if [[ "$embedding_ready" != true ]]; then
+  echo "Embedding service failed readiness" >&2
+  embedding_diagnostics
+  rollback
+  exit 1
+fi
+
 if ! "${compose[@]}" up -d --remove-orphans; then
-  "${compose[@]}" ps >&2
-  "${compose[@]}" logs --tail=100 embedding-service >&2
+  embedding_diagnostics
   rollback
   exit 1
 fi
@@ -77,8 +113,7 @@ for attempt in $(seq 1 20); do
 done
 
 echo "Deployment failed readiness check" >&2
-"${compose[@]}" ps >&2
-"${compose[@]}" logs --tail=100 embedding-service >&2
+embedding_diagnostics
 "${compose[@]}" logs --tail=100 backend >&2
 rollback
 exit 1

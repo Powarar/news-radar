@@ -49,8 +49,9 @@ services:
     build: ./embedding-service
     image: news-radar-embedding-service:latest
     environment:
-      EMBEDDING_MODEL: sentence-transformers/paraphrase-multilingual-mpnet-base-v2
-      EMBEDDING_DIMENSION: 768
+      EMBEDDING_MODEL: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      EMBEDDING_DIMENSION: 384
+      EMBEDDING_THREADS: 1
       HOME: /home/app
       HF_HOME: /data/model-cache/hf
     volumes:
@@ -67,7 +68,7 @@ services:
   backend:
     build: ./backend
     image: news-radar-backend:latest
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
     env_file: .env.prod
     depends_on:
       db:
@@ -89,7 +90,7 @@ services:
 
   worker:
     image: news-radar-backend:latest
-    command: celery -A app.workers.celery_app worker --loglevel=info -Q default,parsing,ai,notifications,preferences --concurrency=4
+    command: celery -A app.workers.celery_app worker --loglevel=info -Q default,parsing,ai,notifications,preferences --concurrency=2
     env_file: .env.prod
     depends_on:
       backend:

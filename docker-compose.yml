@@ -33,8 +33,9 @@ services:
   embedding-service:
     build: ./embedding-service
     environment:
-      EMBEDDING_MODEL: sentence-transformers/paraphrase-multilingual-mpnet-base-v2
-      EMBEDDING_DIMENSION: 768
+      EMBEDDING_MODEL: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      EMBEDDING_DIMENSION: 384
+      EMBEDDING_THREADS: 1
       HOME: /home/app
       HF_HOME: /data/model-cache/hf
     volumes:

@@ -77,12 +77,12 @@ def index_news_to_qdrant(
 ) -> None:
     """Ensure news_feed collection exists and upsert the news item embedding to Qdrant."""
     client = _get_qdrant_client()
-    collection_name = "news_feed"
+    collection_name = settings.qdrant_collection_name
 
     try:
         # Create collection if it doesn't exist
         if not client.collection_exists(collection_name):
-            logger.info("Creating news_feed collection in Qdrant...")
+            logger.info("Creating %s collection in Qdrant...", collection_name)
             client.create_collection(
                 collection_name=collection_name,
                 vectors_config=VectorParams(

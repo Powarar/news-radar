@@ -25,7 +25,7 @@ RAG (Retrieval-Augmented Generation) — это «генерация с поис
 | Embedding-сервис | `embedding-service/app/main.py` | Одна модель, batch API, SQLite-кеш, healthcheck |
 | RAG-поиск и генерация | `backend/app/services/ai/news_chat.py` | Векторизация вопроса, поиск Qdrant, prompt для Groq |
 | HTTP endpoint чата | `backend/app/api/v1/routes/news.py` | `POST /api/v1/news/chat` |
-| Векторное хранилище | volume `qdrant_data` | Коллекция Qdrant `news_feed` |
+| Векторное хранилище | volume `qdrant_data` | Коллекция Qdrant `news_feed_minilm_384` |
 | Кеш embeddings | volume `embedding_data` | Модель и SQLite `result-cache/embeddings.sqlite3` |
 
 Отдельной папки с «файлами RAG» нет: RAG — это весь маршрут из
@@ -50,7 +50,7 @@ RAG (Retrieval-Augmented Generation) — это «генерация с поис
 7. Embedding-service считает SHA-256 от имени модели и текста. Готовый вектор
    берётся из SQLite или вычисляется единственной загруженной multilingual
    моделью. И модель, и результат переживают рестарты благодаря volume.
-8. Backend записывает 768-мерный вектор в Qdrant `news_feed`. Payload содержит
+8. Backend записывает 384-мерный вектор в Qdrant `news_feed_minilm_384`. Payload содержит
    исходный title/body, summary и Unix-время публикации; ID точки равен ID
    новости из PostgreSQL.
 
@@ -81,7 +81,7 @@ Prompt не выполняет similarity-поиск. Поиск уже сдел
 ## Embedding API и кеш
 
 Сервис поднимает ровно один Uvicorn worker и одну модель
-`sentence-transformers/paraphrase-multilingual-mpnet-base-v2` размерности 768.
+`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` размерности 384.
 
 - `POST /v1/embeddings` — принимает `{"texts": ["..."]}` (до 32 текстов);
 - `GET /health/live` — процесс работает;

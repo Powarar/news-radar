@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    embedding_model: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-    embedding_dimension: int = 768
+    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    embedding_dimension: int = 384
+    embedding_threads: int = 1
     embedding_model_cache_dir: Path = Path("/data/model-cache")
     embedding_result_cache_db: Path = Path("/data/result-cache/embeddings.sqlite3")
     embedding_max_batch_size: int = 32
@@ -76,6 +77,7 @@ class EmbeddingEngine:
         self._model = TextEmbedding(
             model_name=settings.embedding_model,
             cache_dir=str(settings.embedding_model_cache_dir),
+            threads=settings.embedding_threads,
         )
         logger.info("Embedding model is ready")
 
