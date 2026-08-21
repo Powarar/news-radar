@@ -58,6 +58,8 @@ fi
 "${compose[@]}" build
 "${compose[@]}" run --rm backend alembic upgrade head
 if ! "${compose[@]}" up -d --remove-orphans; then
+  "${compose[@]}" ps >&2
+  "${compose[@]}" logs --tail=100 embedding-service >&2
   rollback
   exit 1
 fi
@@ -76,6 +78,7 @@ done
 
 echo "Deployment failed readiness check" >&2
 "${compose[@]}" ps >&2
+"${compose[@]}" logs --tail=100 embedding-service >&2
 "${compose[@]}" logs --tail=100 backend >&2
 rollback
 exit 1
