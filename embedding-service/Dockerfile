@@ -1,7 +1,9 @@
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    HOME=/home/app \
+    HF_HOME=/data/model-cache/hf
 
 WORKDIR /app
 
@@ -12,9 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir --default-timeout=100 -r requirements.txt
 
-RUN addgroup --system app && adduser --system --ingroup app app \
-    && mkdir -p /data/model-cache /data/result-cache \
-    && chown -R app:app /data
+RUN addgroup --system app && adduser --system --ingroup app --home /home/app app \
+    && mkdir -p /home/app /data/model-cache /data/result-cache \
+    && chown -R app:app /home/app /data
 
 COPY --chown=app:app app ./app
 

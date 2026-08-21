@@ -35,14 +35,16 @@ services:
     environment:
       EMBEDDING_MODEL: sentence-transformers/paraphrase-multilingual-mpnet-base-v2
       EMBEDDING_DIMENSION: 768
+      HOME: /home/app
+      HF_HOME: /data/model-cache/hf
     volumes:
       - embedding_data:/data
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health/ready')\" 2>/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 120s
+      retries: 20
+      start_period: 180s
 
   backend:
     build: ./backend
