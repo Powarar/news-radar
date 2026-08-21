@@ -171,8 +171,8 @@ def test_get_text_embedding_uses_shared_service(monkeypatch):
     fake_http = FakeHttpClient([
         FakeResponse(200, {
             "model": "test-model",
-            "dimension": 768,
-            "embeddings": [[0.1] * 768],
+            "dimension": 384,
+            "embeddings": [[0.1] * 384],
             "cached": [False],
         })
     ])
@@ -180,7 +180,7 @@ def test_get_text_embedding_uses_shared_service(monkeypatch):
 
     vector = embedding.get_text_embedding("тест")
 
-    assert vector == [0.1] * 768
+    assert vector == [0.1] * 384
     assert fake_http.requests[0]["json"] == {"texts": ["тест"]}
 
 
@@ -202,7 +202,7 @@ def test_get_text_embedding_rejects_wrong_dimension(monkeypatch):
 def test_index_news_to_qdrant(monkeypatch):
     from app.services.ai import embedding
     
-    monkeypatch.setattr(embedding, "get_text_embedding", lambda x: [0.1] * 768)
+    monkeypatch.setattr(embedding, "get_text_embedding", lambda x: [0.1] * 384)
     
     # Mock QdrantClient
     class MockQdrant:
@@ -229,7 +229,7 @@ def test_index_news_to_qdrant(monkeypatch):
     assert mock_client.collection_exists_called
     assert mock_client.create_collection_called
     assert mock_client.upsert_called_with is not None
-    assert mock_client.upsert_called_with["collection_name"] == "news_feed"
+    assert mock_client.upsert_called_with["collection_name"] == "news_feed_minilm_384"
     assert mock_client.upsert_called_with["points"][0].id == 123
 
 
