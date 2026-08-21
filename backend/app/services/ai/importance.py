@@ -18,7 +18,7 @@ def score_importance(topic_scores: dict[str, float] | str | None, historical_top
     if isinstance(topic_scores, str):
         try:
             topic_scores = json.loads(topic_scores)
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError):
             topic_scores = None
 
     if not topic_scores or not isinstance(topic_scores, dict):
@@ -36,7 +36,8 @@ def score_importance(topic_scores: dict[str, float] | str | None, historical_top
         if isinstance(row, str):
             try:
                 row = json.loads(row)
-            except Exception:
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                logger.debug("Failed to parse historical topic json: %s", exc)
                 continue
         if not isinstance(row, dict):
             continue

@@ -1,7 +1,8 @@
 import pytest
-from app.core.rate_limit import RateLimiter, UserDailyQuota, _client_ip
 from fastapi import HTTPException
 from starlette.requests import Request
+
+from app.core.rate_limit import RateLimiter, UserDailyQuota, _client_ip
 
 
 def make_request(headers: list[tuple[bytes, bytes]] | None = None) -> Request:

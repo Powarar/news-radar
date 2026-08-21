@@ -1,6 +1,7 @@
 import json
 
 import httpx
+
 from app.services.ai import pipeline
 
 

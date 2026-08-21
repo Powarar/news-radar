@@ -3,7 +3,7 @@ import json
 import pytest
 
 from app.services.ai import news_chat
-from app.services.ai.news_chat import fetch_news_context, answer_news_query
+from app.services.ai.news_chat import answer_news_query, fetch_news_context
 
 
 class FakePoint:
@@ -99,7 +99,7 @@ def test_fetch_news_context_error(monkeypatch):
     
     class ErrorQdrantClient:
         def query_points(self, **kwargs):
-            raise Exception("Qdrant connection error")
+            raise RuntimeError("Qdrant connection error")
             
     monkeypatch.setattr(news_chat, "_get_qdrant_client", lambda: ErrorQdrantClient())
     
@@ -234,7 +234,7 @@ def test_index_news_to_qdrant(monkeypatch):
 
 
 def test_chat_api_endpoint(monkeypatch):
-    from app.api.v1.routes.news import chat_with_news, ChatRequest
+    from app.api.v1.routes.news import ChatRequest, chat_with_news
     from app.services.ai.news_chat import ChatResponse
     
     # Mock answer_news_query
