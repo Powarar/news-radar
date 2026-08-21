@@ -35,5 +35,4 @@ prometheus-fastapi-instrumentator==7.0.0
 flower==2.0.1
 
 # AI / Vector DB
-fastembed==0.3.6
 qdrant-client==1.11.3

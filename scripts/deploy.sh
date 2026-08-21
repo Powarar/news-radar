@@ -18,6 +18,7 @@ compose=(
 
 images=(
   news-radar-backend
+  news-radar-embedding-service
   news-radar-frontend
   news-radar-bot
 )

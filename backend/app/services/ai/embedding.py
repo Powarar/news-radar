@@ -1,28 +1,64 @@
 import logging
-from fastembed import TextEmbedding
+
+import httpx
+from pydantic import BaseModel, ConfigDict
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_model: TextEmbedding | None = None
+_http_client: httpx.Client | None = None
 _qdrant_client: QdrantClient | None = None
 
 
-def get_text_embedding(text: str) -> list[float]:
-    """Generate a vector embedding for the given text using fastembed."""
-    global _model
-    if _model is None:
-        logger.info("Initializing fastembed TextEmbedding model...")
-        _model = TextEmbedding(
-            model_name="sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
-            cache_dir="/tmp/fastembed_cache"
+class EmbeddingServiceError(RuntimeError):
+    """The dedicated embedding service could not return a valid vector."""
+
+
+class _EmbeddingResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    dimension: int
+    embeddings: list[list[float]]
+
+
+def _get_http_client() -> httpx.Client:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.Client(
+            base_url=settings.embedding_service_url.rstrip("/"),
+            timeout=settings.embedding_service_timeout,
         )
-    
-    embeddings = list(_model.embed([text]))
-    return [float(x) for x in embeddings[0]]
+    return _http_client
+
+
+def get_text_embeddings(texts: list[str]) -> list[list[float]]:
+    """Generate vectors through the shared embedding service."""
+    if not texts or any(not text.strip() for text in texts):
+        raise ValueError("texts must contain at least one non-empty string")
+
+    try:
+        response = _get_http_client().post("/v1/embeddings", json={"texts": texts})
+        response.raise_for_status()
+        payload = _EmbeddingResponse.model_validate(response.json())
+    except (httpx.HTTPError, ValueError) as exc:
+        raise EmbeddingServiceError("embedding service request failed") from exc
+
+    if payload.dimension != settings.embedding_dimension:
+        raise EmbeddingServiceError(
+            f"embedding dimension mismatch: {payload.dimension} != {settings.embedding_dimension}"
+        )
+    if len(payload.embeddings) != len(texts):
+        raise EmbeddingServiceError("embedding service returned an unexpected vector count")
+    if any(len(vector) != settings.embedding_dimension for vector in payload.embeddings):
+        raise EmbeddingServiceError("embedding service returned an invalid vector dimension")
+    return payload.embeddings
+
+
+def get_text_embedding(text: str) -> list[float]:
+    return get_text_embeddings([text])[0]
 
 
 def _get_qdrant_client() -> QdrantClient:
@@ -32,7 +68,13 @@ def _get_qdrant_client() -> QdrantClient:
     return _qdrant_client
 
 
-def index_news_to_qdrant(news_id: int, title: str, text: str, summary: str | None, published_at: int):
+def index_news_to_qdrant(
+    news_id: int,
+    title: str,
+    text: str,
+    summary: str | None,
+    published_at: int,
+) -> None:
     """Ensure news_feed collection exists and upsert the news item embedding to Qdrant."""
     client = _get_qdrant_client()
     collection_name = "news_feed"
@@ -43,7 +85,10 @@ def index_news_to_qdrant(news_id: int, title: str, text: str, summary: str | Non
             logger.info("Creating news_feed collection in Qdrant...")
             client.create_collection(
                 collection_name=collection_name,
-                vectors_config=VectorParams(size=768, distance=Distance.COSINE),
+                vectors_config=VectorParams(
+                    size=settings.embedding_dimension,
+                    distance=Distance.COSINE,
+                ),
             )
 
         # Generate embedding for the news content

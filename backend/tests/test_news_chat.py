@@ -1,4 +1,7 @@
 import json
+
+import pytest
+
 from app.services.ai import news_chat
 from app.services.ai.news_chat import fetch_news_context, answer_news_query
 
@@ -31,6 +34,10 @@ class FakeResponse:
 
     def json(self) -> dict:
         return self._payload
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
 
 
 class FakeHttpClient:
@@ -158,12 +165,38 @@ def test_answer_news_query_groq_fallback_and_fail(monkeypatch):
     assert "генерации ответов временно недоступен" in response.answer
 
 
-def test_get_text_embedding_real():
-    from app.services.ai.embedding import get_text_embedding
-    vector = get_text_embedding("тест")
-    assert isinstance(vector, list)
-    assert len(vector) == 768
-    assert all(isinstance(x, float) for x in vector)
+def test_get_text_embedding_uses_shared_service(monkeypatch):
+    from app.services.ai import embedding
+
+    fake_http = FakeHttpClient([
+        FakeResponse(200, {
+            "model": "test-model",
+            "dimension": 768,
+            "embeddings": [[0.1] * 768],
+            "cached": [False],
+        })
+    ])
+    monkeypatch.setattr(embedding, "_http_client", fake_http)
+
+    vector = embedding.get_text_embedding("тест")
+
+    assert vector == [0.1] * 768
+    assert fake_http.requests[0]["json"] == {"texts": ["тест"]}
+
+
+def test_get_text_embedding_rejects_wrong_dimension(monkeypatch):
+    from app.services.ai import embedding
+
+    fake_http = FakeHttpClient([
+        FakeResponse(200, {
+            "dimension": 3,
+            "embeddings": [[0.1, 0.2, 0.3]],
+        })
+    ])
+    monkeypatch.setattr(embedding, "_http_client", fake_http)
+
+    with pytest.raises(embedding.EmbeddingServiceError, match="dimension mismatch"):
+        embedding.get_text_embedding("тест")
 
 
 def test_index_news_to_qdrant(monkeypatch):
@@ -217,4 +250,3 @@ def test_chat_api_endpoint(monkeypatch):
     assert resp.answer == "Ответ на: что нового"
     assert resp.sources_count == 1
     assert resp.status == "ok"
-

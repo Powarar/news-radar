@@ -2,7 +2,6 @@ import logging
 from collections import defaultdict
 
 import httpx
-import redis as redis_sync
 from sqlalchemy import create_engine, or_, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
@@ -19,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 engine = create_engine(settings.database_url_sync, poolclass=NullPool)
 SyncSessionLocal = sessionmaker(engine)
-sync_redis = redis_sync.Redis.from_url(settings.redis_url)
 
 _tg_client: httpx.Client | None = None
 
@@ -313,33 +311,18 @@ def process_news_ai(self, news_id: int, force: bool = False, notify: bool = True
     max_retries=3,
 )
 def index_news_vector(news_id: int):
-    """Генерация эмбеддинга новости и индексирование в Qdrant по очереди (Redis Lock)."""
-    lock = sync_redis.lock("lock:news_embedding", timeout=60, blocking_timeout=15)
-    acquired = False
-    try:
-        acquired = lock.acquire()
-        if not acquired:
-            logger.warning("Could not acquire embedding lock for news_id=%d, retrying", news_id)
-            raise index_news_vector.retry(countdown=5)
+    """Generate a vector through embedding-service and index it in Qdrant."""
+    from app.services.ai.embedding import index_news_to_qdrant
 
-        from app.services.ai.embedding import index_news_to_qdrant
-        with SyncSessionLocal() as session:
-            news = session.get(NewsItem, news_id)
-            if not news or news.ai_status != "ok":
-                return
+    with SyncSessionLocal() as session:
+        news = session.get(NewsItem, news_id)
+        if not news or news.ai_status != "ok":
+            return
 
-            title = news.title or ""
-            text = news.body or ""
-            published_timestamp = int(
-                (news.published_at or news.created_at).timestamp()
-            )
-            index_news_to_qdrant(news.id, title, text, news.summary, published_timestamp)
-    finally:
-        if acquired:
-            try:
-                lock.release()
-            except Exception:
-                pass
+        title = news.title or ""
+        text = news.body or ""
+        published_timestamp = int((news.published_at or news.created_at).timestamp())
+        index_news_to_qdrant(news.id, title, text, news.summary, published_timestamp)
 
 
 # ─────────────────────────────────────────────────────────────

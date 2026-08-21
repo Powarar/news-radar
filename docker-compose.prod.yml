@@ -38,6 +38,28 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  embedding-service:
+    build: ./embedding-service
+    image: news-radar-embedding-service:latest
+    environment:
+      EMBEDDING_MODEL: sentence-transformers/paraphrase-multilingual-mpnet-base-v2
+      EMBEDDING_DIMENSION: 768
+    volumes:
+      - embedding_data:/data
+    restart: always
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health/ready')\" 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 180s
 
   backend:
     build: ./backend
@@ -50,7 +72,9 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
+      embedding-service:
+        condition: service_healthy
     restart: always
     logging: *default-logging
     healthcheck:
@@ -68,6 +92,8 @@ services:
       backend:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      embedding-service:
         condition: service_healthy
     restart: always
     logging: *default-logging
@@ -172,3 +198,4 @@ volumes:
   prometheus_data:
   grafana_data:
   qdrant_data:
+  embedding_data:
