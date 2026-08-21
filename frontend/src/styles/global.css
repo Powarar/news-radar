@@ -153,6 +153,18 @@ input[type=range]::-moz-range-thumb {
   animation: navDotIn 180ms var(--ease) both;
 }
 
+/* The Telegram widget is an iframe; make its outer frame match OAuth buttons. */
+.telegram-login-widget iframe {
+  display: block;
+  width: 100% !important;
+  height: 42px !important;
+  border: 0 !important;
+}
+
+.telegram-login-widget:hover {
+  box-shadow: 0 0 0 1px var(--border-hover);
+}
+
 .news-card {
   position: relative;
   overflow: hidden;

@@ -5,6 +5,7 @@ import { User, NewsItem } from "./types";
 import NavBar from "./components/NavBar";
 import PreferencesPage from "./components/PreferencesPage";
 import SourcesPage from "./components/SourcesPage";
+import ChatPage from "./components/ChatPage";
 import { TOPIC_LABELS, TOPIC_COLORS } from "./constants";
 import {
   readAppearance,
@@ -181,8 +182,10 @@ function NewsCard({ item, user, onReact, enterDelay = 0 }: {
       )}
 
       <div style={s.cardMeta}>
-        <span style={s.source}>{item.source.name}</span>
-        <span style={s.metaSep}>·</span>
+        {item.source.name !== "NewsRadar" && <>
+          <span style={s.source}>{item.source.name}</span>
+          <span style={s.metaSep}>·</span>
+        </>}
         <span style={s.time}>{timeAgo(item.published_at ?? item.created_at)}</span>
       </div>
 
@@ -297,7 +300,7 @@ function FeedPage({ authReady }: { authReady: boolean }) {
   const [loadError, setLoadError] = useState(false);
   const [sort, setSort] = useState<SortMode>("relevance");
 
-  async function loadPage(p: number, sortMode: SortMode = sort) {
+  async function loadPage(p: number, sortMode: SortMode = sort, append = false) {
     // Never send a "Для вас" request until /users/me has confirmed the session.
     // Otherwise the optional backend auth correctly treats it as a guest request
     // and returns the common date-sorted feed.
@@ -311,11 +314,11 @@ function FeedPage({ authReady }: { authReady: boolean }) {
       if (!Array.isArray(r.data?.items) || typeof r.data.total !== "number") {
         throw new Error("Feed API returned an invalid response");
       }
-      setItems(r.data.items);
+      setItems(prev => append ? [...prev, ...r.data.items] : r.data.items);
       setTotal(r.data.total);
       setPage(p);
       setLoadError(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (!append) window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       console.error("Failed to load feed", err);
       setLoadError(true);
@@ -356,7 +359,7 @@ function FeedPage({ authReady }: { authReady: boolean }) {
     }
   }
 
-  const totalPages = Math.ceil(total / LIMIT);
+  const remainingItems = Math.max(0, total - items.length);
 
   return (
     <div style={s.page}>
@@ -386,9 +389,9 @@ function FeedPage({ authReady }: { authReady: boolean }) {
           })}
         </div>
 
-        {loading ? (
+        {loading && items.length === 0 ? (
           Array.from({ length: 5 }).map((_, i) => <CardSkeleton key={i} />)
-        ) : loadError ? (
+        ) : loadError && items.length === 0 ? (
           <div style={s.empty}>
             <p style={{ fontWeight: 600, marginBottom: 6 }}>Не удалось загрузить ленту</p>
             <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 14 }}>
@@ -421,15 +424,18 @@ function FeedPage({ authReady }: { authReady: boolean }) {
           ))
         )}
 
-        {totalPages > 1 && !loading && (
+        {items.length > 0 && (
           <div style={s.pagination}>
-            <button style={s.pageBtn} onClick={() => loadPage(page - 1)} disabled={page === 0}>
-              ← Назад
-            </button>
-            <span style={s.pageInfo}>{page + 1} / {totalPages}</span>
-            <button style={s.pageBtn} onClick={() => loadPage(page + 1)} disabled={page >= totalPages - 1}>
-              Вперёд →
-            </button>
+            {loadError && <span style={s.pageInfo}>Не удалось загрузить следующую часть</span>}
+            {remainingItems > 0 && (
+              <button
+                style={s.pageBtn}
+                onClick={() => loadPage(page + 1, sort, true)}
+                disabled={loading}
+              >
+                {loading ? "Загружаем…" : `Показать ещё — ${Math.min(LIMIT, remainingItems)} новостей`}
+              </button>
+            )}
           </div>
         )}
       </main>
@@ -559,7 +565,7 @@ function TelegramWidget({ onAuth }: { onAuth: (data: object) => void }) {
     document.getElementById("tg-widget")?.appendChild(script);
     return () => { delete (window as any).onTelegramAuth; };
   }, []);
-  return <div id="tg-widget" />;
+  return <div id="tg-widget" className="telegram-login-widget" style={s.telegramWidget} />;
 }
 
 // ─── LoginPage ────────────────────────────────────────────────────────────────
@@ -576,6 +582,7 @@ function LoginPage() {
   function saveTokens(data: { access_token: string; refresh_token: string }) {
     localStorage.setItem("access_token", data.access_token);
     localStorage.setItem("refresh_token", data.refresh_token);
+    window.dispatchEvent(new Event("news-radar-auth-changed"));
     navigate("/feed");
   }
 
@@ -676,9 +683,13 @@ function LoginPage() {
           </svg>
           Войти через Google
         </a>
-        <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
+        <div style={s.telegramLoginWrap}>
           <TelegramWidget onAuth={handleTelegramAuth} />
         </div>
+        <Link to="/feed" style={s.guestBtn}>
+          <span>Продолжить как гость</span>
+          <span style={s.guestBtnHint}>без персональной ленты</span>
+        </Link>
       </div>
     </div>
   );
@@ -1155,6 +1166,40 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "center",
     transition: "border-color 150ms ease",
   },
+  telegramLoginWrap: {
+    width: "100%",
+    height: 42,
+  },
+  telegramWidget: {
+    width: "100%",
+    height: "100%",
+    borderRadius: "var(--radius-sm)",
+    overflow: "hidden",
+  },
+  guestBtn: {
+    width: "100%",
+    marginTop: 2,
+    padding: "10px 14px",
+    border: "1px solid transparent",
+    borderRadius: "var(--radius-sm)",
+    color: "var(--text-muted)",
+    background: "transparent",
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 600,
+    textAlign: "center" as const,
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    lineHeight: 1.35,
+    transition: "background 150ms ease, color 150ms ease",
+  },
+  guestBtnHint: {
+    marginTop: 2,
+    color: "var(--text-subtle)",
+    fontSize: 11,
+    fontWeight: 400,
+  },
 };
 
 // ─── App ──────────────────────────────────────────────────────────────────────
@@ -1167,6 +1212,7 @@ export default function App() {
       <Route path="/feed" element={<FeedPage authReady={authReady} />} />
       <Route path="/preferences" element={<PreferencesPage />} />
       <Route path="/sources" element={<SourcesPage />} />
+      <Route path="/chat" element={<ChatPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />

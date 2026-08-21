@@ -5,6 +5,7 @@ const NAV_LINKS = [
   { to: "/feed", label: "Лента" },
   { to: "/preferences", label: "Темы" },
   { to: "/sources", label: "Источники" },
+  { to: "/chat", label: "Чат" },
   { to: "/profile", label: "Профиль" },
 ];
 

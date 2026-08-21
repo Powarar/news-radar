@@ -58,7 +58,7 @@ def _get_httpx_client() -> httpx.Client:
 def _get_qdrant_client() -> QdrantClient:
     global _qdrant_client
     if _qdrant_client is None:
-        _qdrant_client = QdrantClient(host=settings.QDRANT_HOST, port=6333)
+        _qdrant_client = QdrantClient(host=settings.qdrant_host, port=6333)
     return _qdrant_client
 
 

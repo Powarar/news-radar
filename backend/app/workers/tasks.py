@@ -238,6 +238,7 @@ def fetch_website(source_id: int):
     bind=True,
     # Two retries plus the initial execution: at most three full task runs.
     max_retries=2,
+    rate_limit="15/m",
 )
 def process_news_ai(self, news_id: int, force: bool = False, notify: bool = True):
     """Classify topics and generate a summary, retrying failed Groq runs."""
@@ -291,8 +292,37 @@ def process_news_ai(self, news_id: int, force: bool = False, notify: bool = True
         news.importance_score = score_importance(topics, history)
         session.commit()
 
+        if status == "ok":
+            index_news_vector.delay(news_id)
+
         if topics and notify:
             send_notifications.delay(news_id)
+
+
+# ─────────────────────────────────────────────────────────────
+#  index_news_vector — векторизация и сохранение в Qdrant
+# ─────────────────────────────────────────────────────────────
+
+@celery_app.task(
+    name="app.workers.tasks.index_news_vector",
+    rate_limit="1/s",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=3,
+)
+def index_news_vector(news_id: int):
+    """Generate a vector through embedding-service and index it in Qdrant."""
+    from app.services.ai.embedding import index_news_to_qdrant
+
+    with SyncSessionLocal() as session:
+        news = session.get(NewsItem, news_id)
+        if not news or news.ai_status != "ok":
+            return
+
+        title = news.title or ""
+        text = news.body or ""
+        published_timestamp = int((news.published_at or news.created_at).timestamp())
+        index_news_to_qdrant(news.id, title, text, news.summary, published_timestamp)
 
 
 # ─────────────────────────────────────────────────────────────

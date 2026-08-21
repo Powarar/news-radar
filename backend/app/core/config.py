@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     # Groq
     groq_api_key: str = ""
     groq_api_timeout: int = 30
+    # Qdrant
+    qdrant_host: str = "qdrant"
+    # Embedding service
+    embedding_service_url: str = "http://embedding-service:8001"
+    embedding_service_timeout: float = 60.0
+    embedding_dimension: int = 768
 
 
 settings = Settings()
