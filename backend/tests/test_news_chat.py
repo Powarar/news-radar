@@ -142,6 +142,50 @@ def test_answer_news_query_success(monkeypatch):
     assert response.answer == "Ответ от Groq по новостям."
     assert len(fake_http.requests) == 1
     assert fake_http.requests[0]["json"]["model"] == "llama-3.3-70b-versatile"
+    assert "reasoning_format" not in fake_http.requests[0]["json"]
+
+
+def test_answer_news_query_hides_reasoning(monkeypatch):
+    monkeypatch.setattr(news_chat, "fetch_news_context", lambda q, days: ("Новость", 1))
+    fake_http = FakeHttpClient([
+        FakeResponse(200, {
+            "choices": [{"message": {"content": "<think>Служебные размышления</think>\nФинальный ответ."}}]
+        })
+    ])
+    monkeypatch.setattr(news_chat, "_client", fake_http)
+    monkeypatch.setattr(news_chat.settings, "groq_api_key", "mock_key")
+
+    response = answer_news_query("запрос", days=3)
+
+    assert response.answer == "Финальный ответ."
+    assert "think" not in response.answer
+    assert "Служебные" not in response.answer
+
+
+def test_answer_news_query_rejects_echoed_private_context(monkeypatch):
+    monkeypatch.setattr(news_chat, "fetch_news_context", lambda q, days: ("Новость", 1))
+    fake_http = FakeHttpClient([
+        FakeResponse(200, {
+            "choices": [{"message": {"content": "КОНТЕКСТ СВЕЖИХ НОВОСТЕЙ:\nсекретный prompt"}}]
+        }),
+        FakeResponse(200, {
+            "choices": [{"message": {"content": "Безопасный финальный ответ."}}]
+        }),
+    ])
+    monkeypatch.setattr(news_chat, "_client", fake_http)
+    monkeypatch.setattr(news_chat.settings, "groq_api_key", "mock_key")
+
+    response = answer_news_query("запрос", days=3)
+
+    assert response.answer == "Безопасный финальный ответ."
+    assert len(fake_http.requests) == 2
+
+
+def test_qwen_payload_disables_reasoning():
+    payload = news_chat._chat_payload("qwen/qwen3.6-27b", "prompt")
+
+    assert payload["reasoning_effort"] == "none"
+    assert payload["reasoning_format"] == "hidden"
 
 
 def test_answer_news_query_groq_fallback_and_fail(monkeypatch):

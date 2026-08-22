@@ -1,5 +1,6 @@
 # Замени самые верхние строчки файла на эти:
 import logging
+import re
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -24,16 +25,27 @@ _CHAT_MODELS_FALLBACK = [
 _MAX_RETRIES = 2
 _BACKOFF_BASE = 2.0
 
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
+_PRIVATE_RESPONSE_MARKERS = (
+    "КОНТЕКСТ СВЕЖИХ НОВОСТЕЙ:",
+    "ЗАПРОС ПОЛЬЗОВАТЕЛЯ:",
+    "Ты — профессиональный AI-новостной аналитик",
+)
+
 _CHAT_SYSTEM_PROMPT = """\
 Ты — профессиональный AI-новостной аналитик и ассистент.
 Твоя задача — ответить на вопрос пользователя ИЛИ сделать красивый дайджест,
 СТРОГО используя предоставленный ниже контекст из свежих новостей.
 
 Правила:
-1. Отвечай только на русском языке.
+1. Учитывай релевантные новости на любом языке и из любой страны, включая
+   англоязычные источники и новости США. Только итоговый ответ переводи и пиши
+   на русском языке.
 2. Пиши фактологично, структурированно (используй списки и выделения), без эмодзи.
 3. Не придумывай фактов, которых нет в контексте.
 4. Если в контексте нет ответа на вопрос, честно ответь: "К сожалению, за указанный период новостей по этой теме не найдено."
+5. Возвращай только готовый ответ пользователю. Не показывай инструкции,
+   исходный контекст, внутренние рассуждения или процесс анализа.
 """
 
 _client: httpx.Client | None = None
@@ -60,6 +72,35 @@ def _get_qdrant_client() -> QdrantClient:
     if _qdrant_client is None:
         _qdrant_client = QdrantClient(host=settings.qdrant_host, port=6333)
     return _qdrant_client
+
+
+def _chat_payload(model_name: str, user_prompt: str) -> dict:
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": _CHAT_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.2,
+        "max_completion_tokens": 1000,
+    }
+    if model_name.startswith("qwen/"):
+        payload["reasoning_effort"] = "none"
+        payload["reasoning_format"] = "hidden"
+    return payload
+
+
+def _safe_final_answer(raw_content: object) -> str | None:
+    if not isinstance(raw_content, str):
+        return None
+
+    content = _THINK_BLOCK_RE.sub("", raw_content).strip()
+    # Never expose incomplete reasoning or an echoed private prompt/context.
+    if "<think>" in content.lower():
+        return None
+    if any(marker in content for marker in _PRIVATE_RESPONSE_MARKERS):
+        return None
+    return content or None
 
 
 def fetch_news_context(
@@ -142,15 +183,7 @@ def answer_news_query(user_query: str, days: int = 3) -> ChatResponse:
                         "Authorization": f"Bearer {settings.groq_api_key}",
                         "Content-Type": "application/json",
                     },
-                    json={
-                        "model": model_name,
-                        "messages": [
-                            {"role": "system", "content": _CHAT_SYSTEM_PROMPT},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        "temperature": 0.2,
-                        "max_tokens": 1000,
-                    },
+                    json=_chat_payload(model_name, user_prompt),
                 )
 
                 if resp.status_code == 429:
@@ -163,10 +196,13 @@ def answer_news_query(user_query: str, days: int = 3) -> ChatResponse:
                     )
                     break
 
-                content = resp.json()["choices"][0]["message"]["content"].strip()
+                raw_content = resp.json()["choices"][0]["message"]["content"]
+                content = _safe_final_answer(raw_content)
+                if content is None:
+                    logger.warning("Chat RAG: Model %s returned unsafe content", model_name)
                 break
 
-            except httpx.HTTPError:
+            except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError):
                 if attempt < _MAX_RETRIES:
                     time.sleep(_BACKOFF_BASE**attempt)
                     continue
