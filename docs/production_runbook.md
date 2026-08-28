@@ -100,6 +100,28 @@ Docker JSON logs are rotated at 10 MB with three files per container.
 
 ## Cloudflare and origin TLS
 
+### Current Flexible-mode hardening
+
+Until origin TLS is installed, Cloudflare must have the DNS record proxied and
+SSL/TLS mode set to **Flexible**. Enable **Always Use HTTPS** at Cloudflare so
+visitor HTTP is redirected at the edge; an origin redirect cannot infer the
+visitor scheme reliably in Flexible mode.
+
+Nginx rejects public origin traffic unless the TCP peer belongs to Cloudflare's
+published address ranges. Private Docker networks and loopback remain allowed
+for health checks. Keep the Cloudflare ranges in `nginx/nginx.conf` synchronized
+with <https://www.cloudflare.com/ips/>. For defense in depth, apply the same
+allowlist to inbound TCP/80 in the VPS/provider firewall. Do not simply close
+port 80 while Flexible mode is active: Cloudflare needs it to reach the origin.
+
+Verify after deployment:
+
+```bash
+curl -I http://ORIGIN_IP -H 'Host: news.safonovpavel.space'  # must be 403
+curl -I http://news.safonovpavel.space                       # must redirect to HTTPS
+curl -I https://news.safonovpavel.space                      # must be 200/3xx
+```
+
 Cloudflare's visitor certificate does not by itself encrypt or authenticate
 the Cloudflare-to-origin connection.
 

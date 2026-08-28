@@ -95,7 +95,7 @@ def test_rate_limit_retries_using_retry_after(monkeypatch):
     assert sleeps == [2.0]
 
 
-def test_network_errors_use_exponential_backoff(monkeypatch):
+def test_network_errors_retry_each_fallback_once(monkeypatch):
     class FailingClient:
         is_closed = False
 
@@ -115,6 +115,16 @@ def test_network_errors_use_exponential_backoff(monkeypatch):
 
     topics, summary, status = pipeline.process("Test article")
 
-    assert fake.calls == 12
-    assert sleeps == [1.0, 2.0] * 4
+    assert fake.calls == 4
+    assert sleeps == [1.0, 1.0]
     assert (topics, summary, status) == ({}, None, "failed")
+
+
+def test_auth_error_does_not_try_other_models(monkeypatch):
+    fake = FakeClient([FakeResponse(401, {"error": {"message": "bad key"}})])
+    monkeypatch.setattr(pipeline.settings, "groq_api_key", "test")
+    monkeypatch.setattr(pipeline, "_client", fake)
+    monkeypatch.setattr(pipeline, "classify_keywords", lambda _text: {})
+
+    assert pipeline.process("Test article") == ({}, None, "failed")
+    assert len(fake.requests) == 1

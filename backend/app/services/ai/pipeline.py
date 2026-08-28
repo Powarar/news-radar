@@ -20,17 +20,10 @@ logger = logging.getLogger(__name__)
 _MAX_CHARS = 1500
 _GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-_MODELS_FALLBACK = [
-    "llama-3.1-8b-instant",       # Основная: 14.4K RPD
-    "allam-2-7b",                 # Резерв 1: 7K RPD
-    "qwen/qwen3.6-27b",           # Резерв 2: 1K RPD
-    "openai/gpt-oss-20b",         # Резерв 3: 1K RPD
-]
-
-_MAX_RETRIES = 2
-_BACKOFF_BASE = 2.0
+_DEFAULT_MODELS = ("openai/gpt-oss-20b", "openai/gpt-oss-120b")
+_MAX_RETRIES = 1
 _MIN_RETRY_AFTER = 1.0
-_MAX_RETRY_AFTER = 60.0
+_MAX_RETRY_AFTER = 10.0
 
 TOPICS = [
     "politics", "military", "technology", "health",
@@ -99,6 +92,13 @@ def _get_client() -> httpx.Client:
     return _client
 
 
+def _models() -> tuple[str, ...]:
+    configured = tuple(
+        model.strip() for model in settings.groq_models.split(",") if model.strip()
+    )
+    return configured or _DEFAULT_MODELS
+
+
 def _soft_truncate(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
@@ -157,12 +157,19 @@ def process(text: str, news_id: int | None = None) -> tuple[dict[str, float], st
     label = f"news_id={news_id}" if news_id is not None else "caller=unknown"
     content = None
 
-    for model_name in _MODELS_FALLBACK:
+    deadline = time.monotonic() + settings.groq_pipeline_timeout
+    for model_name in _models():
         for attempt in range(_MAX_RETRIES + 1):
+            if time.monotonic() >= deadline:
+                logger.warning("Groq pipeline time budget exhausted [%s]", label)
+                break
             try:
                 client = _get_client()
                 resp = client.post(
                     _GROQ_URL,
+                    timeout=max(1.0, min(
+                        float(settings.groq_api_timeout), deadline - time.monotonic()
+                    )),
                     headers={
                         "Authorization": f"Bearer {settings.groq_api_key}",
                         "Content-Type": "application/json",
@@ -181,7 +188,7 @@ def process(text: str, news_id: int | None = None) -> tuple[dict[str, float], st
 
                 if resp.status_code == 429:
                     retry_after = _parse_retry_after(resp)
-                    if attempt < _MAX_RETRIES:
+                    if attempt < _MAX_RETRIES and time.monotonic() + retry_after < deadline:
                         logger.info(
                             "Model %s rate-limited (attempt %d/%d), sleeping %.1fs [%s]",
                             model_name, attempt + 1, _MAX_RETRIES + 1, retry_after, label,
@@ -193,6 +200,15 @@ def process(text: str, news_id: int | None = None) -> tuple[dict[str, float], st
                         model_name, label,
                     )
                     break  
+
+                # Authentication and project permission failures apply to every
+                # model, so trying the rest only adds latency.
+                if resp.status_code in (401, 403):
+                    logger.error(
+                        "Groq authentication/permission error HTTP %d: %.300s [%s]",
+                        resp.status_code, resp.text[:300], label,
+                    )
+                    return classify_keywords(text), None, "failed"
 
                 if resp.status_code != 200:
                     logger.warning(
@@ -206,7 +222,9 @@ def process(text: str, news_id: int | None = None) -> tuple[dict[str, float], st
 
             except httpx.HTTPError as e:
                 if attempt < _MAX_RETRIES:
-                    wait = _BACKOFF_BASE ** attempt
+                    wait = 1.0
+                    if time.monotonic() + wait >= deadline:
+                        break
                     time.sleep(wait)
                     continue
                 logger.warning("Network error with model %s: %s [%s]", model_name, e, label)

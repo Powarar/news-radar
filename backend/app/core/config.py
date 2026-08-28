@@ -63,6 +63,8 @@ class Settings(BaseSettings):
     # Groq
     groq_api_key: str = ""
     groq_api_timeout: int = 30
+    groq_models: str = "openai/gpt-oss-20b,openai/gpt-oss-120b"
+    groq_pipeline_timeout: float = 45.0
     # Qdrant
     qdrant_host: str = "qdrant"
     # Embedding service
