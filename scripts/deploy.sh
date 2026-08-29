@@ -66,6 +66,11 @@ fi
 
 "$project_dir/scripts/backup_postgres.sh"
 
+# Services that were started before the observability profile became optional
+# remain running unless they are stopped explicitly. Free their memory before
+# building and replacing the core stack on the 2 GiB production host.
+"${compose[@]}" --profile observability stop flower prometheus grafana
+
 # Build first, migrate with the new backend image, then replace services.
 "${compose[@]}" build
 "${compose[@]}" run --rm backend alembic upgrade head
